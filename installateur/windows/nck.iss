@@ -1,7 +1,10 @@
-; Script Inno Setup — produit NCK-Setup-<version>.exe
+﻿; Script Inno Setup 6.1+ (UTF-8 avec BOM) — produit NCK-Setup-<version>.exe
 ; Compilation : iscc /DVersion=0.12.0 installateur\windows\nck.iss   (depuis la racine du dépôt, après construire.py)
 #ifndef Version
   #define Version "0.0.0"
+#endif
+#if !FileExists(AddBackslash(SourcePath) + "..\..\dist\nck\nck.exe")
+  #error Construisez d'abord l'exécutable : python installateur\construire.py  (dist\nck\nck.exe introuvable)
 #endif
 #define Nom "NCK"
 #define Editeur "NockiProgramTECH"
@@ -26,14 +29,15 @@ UninstallDisplayIcon={app}\nck.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ChangesAssociations=yes
 ChangesEnvironment=yes
 
 [Languages]
+#if FileExists(AddBackslash(CompilerPath) + "Languages\French.isl")
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+#endif
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
@@ -67,7 +71,7 @@ Root: HKA; Subkey: "Software\Classes\NCK.Fichier\shell\nck_verifier"; ValueType:
 Root: HKA; Subkey: "Software\Classes\NCK.Fichier\shell\nck_verifier\command"; ValueType: string; ValueName: ""; ValueData: "cmd.exe /k """"{app}\nck.exe"" verifier ""%1"""""; Tasks: menu
 
 [Run]
-Filename: "{app}\nck.exe"; Parameters: "info"; Description: "Afficher les informations NCK"; Flags: postinstall nowait skipifsilent shellexec unchecked
+Filename: "{cmd}"; Parameters: "/k """"{app}\nck.exe"" info"""; Description: "Afficher les informations NCK"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]
 // Ajout / retrait du PATH utilisateur (ou machine si installé en admin), sans doublon.
