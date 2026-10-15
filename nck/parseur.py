@@ -1,9 +1,9 @@
 """Analyseur syntaxique : transforme les jetons en arbre syntaxique."""
 
 from .arbre import (
-    Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
+    Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Cas, Champ, Continuer, DeclClasse, DeclFonction,
     DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral,
-    Logique, Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
+    Logique, Membre, Parametre, Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -88,7 +88,7 @@ class Parseur:
             return
         if j.genre in ("nl", "fin_fichier"):
             return
-        if j.genre == "motcle" and j.valeur in ("fin", "sinon", "attraper", "enfin"):
+        if j.genre == "motcle" and j.valeur in ("fin", "sinon", "attraper", "enfin", "cas"):
             return
         raise self.erreur(f"fin d'instruction attendue, mais {self._decrire(j)} trouvé", j)
 
@@ -140,6 +140,10 @@ class Parseur:
                 return self.instr_si()
             if mot == "essayer":
                 return self.instr_essayer()
+            if mot == "selon":
+                return self.instr_selon()
+            if mot == "cas":
+                raise self.erreur("'cas' inattendu : il doit se trouver dans un bloc 'selon'")
             if mot in ("importer", "depuis"):
                 return self.instr_importer()
             if mot == "comme":
@@ -160,7 +164,7 @@ class Parseur:
                 valeur = None
                 nxt = self.jetons[self.pos]
                 if not (nxt.genre in ("nl", "fin_fichier") or (nxt.genre == "op" and nxt.valeur == ";")
-                        or (nxt.genre == "motcle" and nxt.valeur in ("fin", "sinon", "attraper", "enfin"))):
+                        or (nxt.genre == "motcle" and nxt.valeur in ("fin", "sinon", "attraper", "enfin", "cas"))):
                     valeur = self.expression()
                 self.fin_instruction()
                 return Retourner(valeur, ligne=j.ligne, colonne=j.colonne)
@@ -233,7 +237,13 @@ class Parseur:
                 pnom = self.attendre_ident("nom de paramètre attendu")
                 self.attendre_op(":", f"':' attendu après le paramètre '{pnom.valeur}' pour indiquer son type")
                 ptype = self.type_annot()
-                parametres.append(Parametre(pnom.valeur, ptype, ligne=pnom.ligne, colonne=pnom.colonne))
+                defaut = None
+                if self.est_op("="):
+                    self.avancer()
+                    defaut = self.expression()
+                elif parametres and parametres[-1].defaut is not None:
+                    raise self.erreur(f"le paramètre '{pnom.valeur}' doit avoir une valeur par défaut car il suit un paramètre qui en a une", pnom)
+                parametres.append(Parametre(pnom.valeur, ptype, defaut, ligne=pnom.ligne, colonne=pnom.colonne))
                 if self.est_op(","):
                     self.avancer()
                     continue
@@ -367,6 +377,39 @@ class Parseur:
         self.attendre_motcle("fin")
         return Essayer(corps, clauses, enfin, ligne=mot.ligne, colonne=mot.colonne)
 
+    def instr_selon(self) -> Selon:
+        mot = self.avancer()
+        sujet = self.expression()
+        self.attendre_op(":", "':' attendu après la valeur de 'selon'")
+        self.sauter_nl()
+        cas: list[Cas] = []
+        sinon = None
+        while not self.est_motcle("fin"):
+            if self.est("fin_fichier"):
+                raise self.erreur(f"'fin' attendu pour fermer le 'selon' de la ligne {mot.ligne}")
+            if self.est_motcle("cas"):
+                jc = self.avancer()
+                valeurs = [self.expression()]
+                while self.est_op(","):
+                    self.avancer()
+                    valeurs.append(self.expression())
+                bloc, multi = self.corps("cas", "sinon", "fin")
+                cas.append(Cas(valeurs, bloc, ligne=jc.ligne, colonne=jc.colonne))
+            elif self.est_motcle("sinon"):
+                js = self.avancer()
+                if sinon is not None:
+                    raise self.erreur("un seul 'sinon' est autorisé dans un 'selon'", js)
+                sinon, multi = self.corps("cas", "fin")
+                if self.est_motcle("cas"):
+                    raise self.erreur("'sinon' doit être le dernier cas du 'selon'")
+            else:
+                raise self.erreur(f"'cas' ou 'sinon' attendu dans le 'selon', mais {self._decrire(self.courant())} trouvé")
+            self.sauter_nl()
+        self.attendre_motcle("fin")
+        if not cas:
+            raise self.erreur("un 'selon' doit avoir au moins un 'cas'", mot)
+        return Selon(sujet, cas, sinon, ligne=mot.ligne, colonne=mot.colonne)
+
     def instr_tantque(self) -> TantQue:
         mot = self.avancer()
         condition = self.expression()
@@ -378,12 +421,16 @@ class Parseur:
     def instr_pour(self) -> Pour:
         mot = self.avancer()
         var = self.attendre_ident("nom de variable de boucle attendu")
+        var2 = None
+        if self.est_op(","):
+            self.avancer()
+            var2 = self.attendre_ident("deuxième nom de variable attendu après ','").valeur
         self.attendre_motcle("dans")
         iterable = self.expression()
         corps, multi = self.corps("fin")
         if multi:
             self.attendre_motcle("fin")
-        return Pour(var.valeur, iterable, corps, ligne=mot.ligne, colonne=mot.colonne)
+        return Pour(var.valeur, iterable, corps, var2, ligne=mot.ligne, colonne=mot.colonne)
 
     # ----- expressions (par précédence croissante) -----
 
@@ -499,6 +546,25 @@ class Parseur:
         if j.genre == "texte":
             self.avancer()
             return Litteral(j.valeur, ligne=j.ligne, colonne=j.colonne)
+        if j.genre == "ftexte":
+            self.avancer()
+            parties: list = []
+            for partie in j.valeur:
+                if isinstance(partie, str):
+                    parties.append(partie)
+                    continue
+                code, lc, cc = partie
+                jetons = lexer(code, self.fichier)
+                for jt in jetons:
+                    jt.ligne = lc
+                    jt.colonne += cc - 1
+                sous = Parseur(jetons, self.fichier)
+                sous.profondeur = 1
+                expr = sous.expression()
+                if not sous.est("fin_fichier"):
+                    raise sous.erreur(f"fin de l'expression attendue dans le texte formaté, mais {self._decrire(sous.courant())} trouvé")
+                parties.append(expr)
+            return TexteFormate(parties, ligne=j.ligne, colonne=j.colonne)
         if j.genre == "motcle":
             if j.valeur == "vrai":
                 self.avancer()

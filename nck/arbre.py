@@ -26,6 +26,11 @@ class Litteral(Noeud):
 
 
 @dataclass
+class TexteFormate(Noeud):
+    parties: list["str | Expr"]
+
+
+@dataclass
 class ListeLit(Noeud):
     elements: list["Expr"]
 
@@ -79,7 +84,7 @@ class Index(Noeud):
     index: "Expr"
 
 
-Expr = Litteral | ListeLit | DicoLit | Identifiant | Unaire | Binaire | Logique | Appel | Index | Membre
+Expr = Litteral | TexteFormate | ListeLit | DicoLit | Identifiant | Unaire | Binaire | Logique | Appel | Index | Membre
 
 
 # ---------- Instructions ----------
@@ -127,12 +132,27 @@ class Pour(Noeud):
     variable: str
     iterable: Expr
     corps: Bloc
+    variable2: Optional[str] = None     # pour i, x dans liste / pour cle, valeur dans dico
+
+
+@dataclass
+class Cas(Noeud):
+    valeurs: list[Expr]
+    corps: Bloc
+
+
+@dataclass
+class Selon(Noeud):
+    sujet: Expr
+    cas: list[Cas]
+    sinon: Optional[Bloc]
 
 
 @dataclass
 class Parametre(Noeud):
     nom: str
     type_annot: TypeAnnot
+    defaut: Optional[Expr] = None
 
 
 @dataclass
@@ -200,7 +220,7 @@ class Continuer(Noeud):
 
 
 Instr = (DeclVariable | Affectation | ExprInstr | Bloc | Si | TantQue | Pour
-         | DeclFonction | DeclClasse | Essayer | Lever | Importer | Retourner | Arreter | Continuer)
+         | DeclFonction | DeclClasse | Essayer | Lever | Importer | Selon | Retourner | Arreter | Continuer)
 
 
 @dataclass

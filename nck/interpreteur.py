@@ -10,7 +10,7 @@ from typing import Callable
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
     DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
-    Pour, Programme, Retourner, Si, TantQue, Unaire,
+    Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .modules import Chargeur
@@ -328,13 +328,31 @@ class Interpreteur:
         utilise_controle = _contient_controle(p.corps)
         noeud = p.iterable
 
+        nom2 = p.variable2
+
         def obtenir(env):
             it = iterable(env)
             if isinstance(it, dict):
-                return list(it)          # copie : le corps peut modifier le dictionnaire
+                return list(it.items()) if nom2 is not None else list(it)   # copie : le corps peut modifier le dico
             if isinstance(it, bool) or not isinstance(it, (list, str, int)):
                 raise self.erreur(f"impossible de parcourir un {nom_type_valeur(it)}", noeud)
-            return range(it) if isinstance(it, int) else it
+            if isinstance(it, int):
+                it = range(it)
+            return enumerate(it) if nom2 is not None else it
+
+        if nom2 is not None:
+            def pour2(env):
+                vars_ = env.vars
+                for v1, v2 in obtenir(env):
+                    vars_[nom] = v1
+                    vars_[nom2] = v2
+                    try:
+                        corps(env)
+                    except _Continue:
+                        continue
+                    except _Arret:
+                        break
+            return pour2
 
         if not utilise_controle:
             def pour(env):
@@ -420,6 +438,8 @@ class Interpreteur:
         """Retourne `fabriquer(env_def) -> FonctionNck`. Une méthode reçoit l'objet (`soi`) en premier argument."""
         corps = self.compiler_instructions(f.corps.instructions)
         noms = (["soi"] if methode else []) + [p.nom for p in f.parametres]
+        defauts = [(p.nom, self.expression(p.defaut)) for p in f.parametres if p.defaut is not None]
+        minimum = len(noms) - len(defauts)
         nom = f.nom
         a_retour = _contient_retour(f.corps)
         limite = self.limite_recursion
@@ -429,6 +449,11 @@ class Interpreteur:
             def appeler(*args):
                 env = Env(env_def)
                 env.vars.update(zip(noms, args))
+                if len(args) < len(noms):
+                    if len(args) < minimum:
+                        raise self.erreur(f"'{nom}' attend au moins {minimum - (1 if methode else 0)} argument(s), mais {len(args) - (1 if methode else 0)} fourni(s)", f)
+                    for pn, pd in defauts[len(args) - minimum:]:
+                        env.vars[pn] = pd(env_def)
                 profondeur[0] += 1
                 if profondeur[0] > limite:
                     profondeur[0] = 0
@@ -444,7 +469,9 @@ class Interpreteur:
                     return None
                 finally:
                     profondeur[0] -= 1
-            return FonctionNck(nom, len(noms), appeler)
+            fn = FonctionNck(nom, len(noms), appeler)
+            fn.arite_min = minimum
+            return fn
 
         return fabriquer
 
@@ -480,6 +507,37 @@ class Interpreteur:
             else:
                 env.vars[alias] = ModuleNck(m.nom, m.env)
         return importer
+
+    def i_Selon(self, s: Selon) -> Fn:
+        sujet = self.expression(s.sujet)
+        cas = [([self.expression(v) for v in c.valeurs], self.compiler_instructions(c.corps.instructions)) for c in s.cas]
+        sinon = self.compiler_instructions(s.sinon.instructions) if s.sinon is not None else None
+        # Optimisation : si tous les cas sont des littéraux, table de correspondance.
+        if all(isinstance(v, Litteral) and not isinstance(v.valeur, float) for c in s.cas for v in c.valeurs):
+            table = {}
+            for c, (_, bloc) in zip(s.cas, cas):
+                for v in c.valeurs:
+                    table.setdefault((type(v.valeur), v.valeur), bloc)
+
+            def selon_table(env):
+                v = sujet(env)
+                bloc = table.get((type(v), v))
+                if bloc is not None:
+                    bloc(env)
+                elif sinon is not None:
+                    sinon(env)
+            return selon_table
+
+        def selon(env):
+            v = sujet(env)
+            for valeurs, bloc in cas:
+                for f in valeurs:
+                    if f(env) == v:
+                        bloc(env)
+                        return
+            if sinon is not None:
+                sinon(env)
+        return selon
 
     def i_Lever(self, l: Lever) -> Fn:
         val = self.expression(l.valeur)
@@ -542,6 +600,13 @@ class Interpreteur:
     def e_Litteral(self, l: Litteral) -> Fn:
         v = l.valeur
         return lambda env: v
+
+    def e_TexteFormate(self, t: TexteFormate) -> Fn:
+        parties = [(p if isinstance(p, str) else self.expression(p)) for p in t.parties]
+
+        def formater(env):
+            return "".join(p if isinstance(p, str) else vers_texte(p(env)) for p in parties)
+        return formater
 
     def e_ListeLit(self, l: ListeLit) -> Fn:
         elems = [self.expression(x) for x in l.elements]
@@ -829,8 +894,9 @@ class Interpreteur:
 
     def _appeler_valeur(self, f, valeurs: list, noeud, nom: str):
         if isinstance(f, FonctionNck):
-            if f.arite >= 0 and f.arite != len(valeurs):
-                raise self.erreur(f"'{f.nom}' attend {f.arite} argument(s), mais {len(valeurs)} fourni(s)", noeud)
+            if f.arite >= 0 and not (f.arite_min <= len(valeurs) <= f.arite):
+                attendu = f"{f.arite}" if f.arite_min == f.arite else f"entre {f.arite_min} et {f.arite}"
+                raise self.erreur(f"'{f.nom}' attend {attendu} argument(s), mais {len(valeurs)} fourni(s)", noeud)
             return f.appeler(*valeurs)
         if callable(f):
             try:
@@ -861,10 +927,18 @@ def _contient_controle(bloc: Bloc) -> bool:
                         return True
             elif isinstance(i, Essayer) and _visiter_essayer(i, visiter):
                 return True
+            elif isinstance(i, Selon) and _visiter_selon(i, visiter):
+                return True
             elif isinstance(i, Bloc) and visiter(i.instructions):
                 return True
         return False
     return visiter(bloc.instructions)
+
+
+def _visiter_selon(s: Selon, visiter) -> bool:
+    if any(visiter(c.corps.instructions) for c in s.cas):
+        return True
+    return s.sinon is not None and visiter(s.sinon.instructions)
 
 
 def _visiter_essayer(e: Essayer, visiter) -> bool:
@@ -893,6 +967,8 @@ def _contient_retour(bloc: Bloc) -> bool:
                 if visiter(i.corps.instructions):
                     return True
             elif isinstance(i, Essayer) and _visiter_essayer(i, visiter):
+                return True
+            elif isinstance(i, Selon) and _visiter_selon(i, visiter):
                 return True
             elif isinstance(i, Bloc) and visiter(i.instructions):
                 return True

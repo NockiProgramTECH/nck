@@ -27,6 +27,17 @@
     "chaines": {
       "patterns": [
         {
+          "name": "string.interpolated.nck",
+          "begin": "f\"", "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.nck", "match": "\\\\.|\\{\\{|\\}\\}" },
+            { "name": "meta.embedded.expression.nck", "begin": "\\{", "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.nck" } },
+              "endCaptures": { "0": { "name": "punctuation.section.embedded.end.nck" } },
+              "patterns": [{ "include": "$self" }] }
+          ]
+        },
+        {
           "name": "string.quoted.double.nck",
           "begin": "\"", "end": "\"",
           "patterns": [{ "name": "constant.character.escape.nck", "match": "\\\\." }]
@@ -63,7 +74,7 @@
     },
     "mots-cles": {
       "patterns": [
-        { "name": "keyword.control.conditional.nck", "match": "\\b(si|sinon)\\b" },
+        { "name": "keyword.control.conditional.nck", "match": "\\b(si|sinon|selon|cas)\\b" },
         { "name": "keyword.control.loop.nck", "match": "\\b(tantque|pour|dans|arreter|continuer)\\b" },
         { "name": "keyword.control.flow.nck", "match": "\\b(retourner|fin)\\b" },
         { "name": "keyword.control.exception.nck", "match": "\\b(essayer|attraper|enfin|lever)\\b" },

@@ -11,12 +11,12 @@
   ],
   "surroundingPairs": [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""], ["'", "'"]],
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(si|sinon|tantque|pour|fonction|classe|essayer|attraper|enfin)\\b.*:\\s*(//.*|#.*)?$",
-    "decreaseIndentPattern": "^\\s*(fin|sinon|attraper|enfin)\\b"
+    "increaseIndentPattern": "^\\s*(si|sinon|tantque|pour|fonction|classe|essayer|attraper|enfin|selon|cas)\\b.*:\\s*(//.*|#.*)?$",
+    "decreaseIndentPattern": "^\\s*(fin|sinon|attraper|enfin|cas)\\b"
   },
   "folding": {
     "markers": {
-      "start": "^\\s*(si|tantque|pour|fonction|classe|essayer)\\b.*:\\s*$",
+      "start": "^\\s*(si|tantque|pour|fonction|classe|essayer|selon)\\b.*:\\s*$",
       "end": "^\\s*fin\\b"
     }
   },

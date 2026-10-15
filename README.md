@@ -80,7 +80,7 @@ fonction factorielle(n: entier) -> entier:
     si (n <= 1): retourner 1
     retourner n * factorielle(n - 1)
 fin
-ecrire("5! =", factorielle(5))
+ecrire(f"5! = {factorielle(5)}")
 ```
 
 Et des classes typées, à la Pydantic :
@@ -163,4 +163,5 @@ pytest
 - [x] v0.4 — dictionnaires `dico<K, V>`
 - [x] v0.5 — modules (`importer "fichier.nck"`, `comme`, `depuis … importer`)
 - [x] v0.6 — bibliothèque standard : fichiers, JSON, date/heure, arguments, formatage
+- [x] v0.7 — textes formatés `f"..."`, paramètres par défaut, `selon`/`cas`, `pour i, x dans`
 - [ ] réécriture du moteur en C

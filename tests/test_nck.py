@@ -639,3 +639,87 @@ def test_arguments_et_env(monkeypatch):
 
 def test_quelconque_indexable_par_texte():
     assert run('variable d: quelconque = {"a": [1, 2]}\necrire(d["a"][1])') == "2\n"
+
+
+# ---------- confort : f-textes, défauts, selon, pour i, x ----------
+
+def test_texte_formate():
+    assert run('variable n = "Awa"\necrire(f"Bonjour {n}, {1 + 2} {{ok}} {majuscule(n)[0]} {[1, 2]}")') == "Bonjour Awa, 3 {ok} A [1, 2]\n"
+    with pytest.raises(ErreurType, match="variable 'x' inconnue") as exc:
+        compiler_source('ecrire(f"a {x} b")')
+    assert (exc.value.ligne, exc.value.colonne) == (1, 13)
+    with pytest.raises(ErreurSyntaxe, match="'}' manquant"):
+        compiler_source('ecrire(f"a {1 b")')
+    with pytest.raises(ErreurType, match="rien"):
+        compiler_source('ecrire(f"{ecrire(1)}")')
+
+
+def test_parametres_par_defaut():
+    src = '''
+fonction f(a: entier, b: entier = 10, c: texte = "x") -> texte: retourner f"{a + b}{c}"
+ecrire(f(1), f(1, 2), f(1, 2, "y"))
+variable g: fonction<entier, texte> = f
+ecrire(g(5))
+classe K:
+    v: entier
+    fonction add(n: entier = 1) -> entier: retourner soi.v + n
+fin
+ecrire(K(1).add(), K(1).add(5))
+'''
+    assert run(src) == "11x 3x 3y\n15\n2 6\n"
+    with pytest.raises(ErreurSyntaxe, match="doit avoir une valeur par défaut"):
+        compiler_source("fonction f(a: entier = 1, b: entier): retourner")
+    with pytest.raises(ErreurType, match="valeur par défaut du paramètre 'b'"):
+        compiler_source('fonction f(a: entier, b: entier = "x"): retourner')
+    with pytest.raises(ErreurType, match="entre 1 et 2"):
+        compiler_source("fonction f(a: entier, b: entier = 2): retourner\nf()")
+
+
+def test_selon():
+    src = '''
+fonction nom(n: entier) -> texte:
+    selon (n):
+        cas 1: retourner "un"
+        cas 2, 3:
+            retourner "deux-trois"
+        sinon: retourner "autre"
+    fin
+fin
+ecrire(nom(1), nom(3), nom(9))
+variable x = 2.5
+selon (x):
+    cas 1 + 1.5: ecrire("calculé")
+fin
+selon ("b"):
+    cas "a": ecrire("non")
+fin
+'''
+    assert run(src) == "un deux-trois autre\ncalculé\n"
+    with pytest.raises(ErreurType, match="ne peut jamais correspondre"):
+        compiler_source('selon (3):\n    cas "a": ecrire(1)\nfin')
+    with pytest.raises(ErreurType, match="doit retourner"):
+        compiler_source('fonction f(n: entier) -> entier:\n    selon (n):\n        cas 1: retourner 1\n    fin\nfin')
+    with pytest.raises(ErreurSyntaxe, match="au moins un 'cas'"):
+        compiler_source("selon (3):\nfin")
+
+
+def test_pour_deux_variables():
+    src = '''
+pour i, x dans ["a", "b"]: ecrire(i, x)
+pour k, v dans {"x": 1}: ecrire(k, v)
+pour i, c dans "ab": ecrire(i, c)
+pour i, x dans [10, 20, 30]:
+    si (i == 1): arreter
+    ecrire(x)
+fin
+'''
+    assert run(src) == "0 a\n1 b\nx 1\n0 a\n1 b\n10\n"
+    with pytest.raises(ErreurType, match="même nom"):
+        compiler_source("pour i, i dans [1]: ecrire(i)")
+    with pytest.raises(ErreurType, match="texte à une cible de type entier"):
+        compiler_source('pour k, v dans {"x": 1}:\n    variable n: entier = k\nfin')
+
+
+def test_exemple_confort():
+    source = (RACINE / "exemples" / "confort.nck").read_text(encoding="utf-8")
+    assert "7 -> week-end" in run(source)

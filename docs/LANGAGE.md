@@ -60,6 +60,12 @@ n'est implicite : utilisez `texte(x)`, `entier(x)`, `reel(x)`, `booleen(x)`.
 
 Échappements dans les textes : `\n`, `\t`, `\\`, `\"`, `\'`.
 
+**Textes formatés** : préfixe `f`, expressions entre accolades, `{{` et `}}` pour des accolades littérales.
+
+```
+ecrire(f"Bonjour {nom}, tu as {age + 1} ans ({majuscule(nom)})")
+```
+
 ## 4. Opérateurs
 
 | Catégorie     | Opérateurs                               | Notes                                            |
@@ -104,6 +110,20 @@ si (a == b): ecrire("égaux") sinon: ecrire("différents")
 
 La condition doit être un `booleen` (pas `si (3)`).
 
+### `selon` / `cas`
+
+```
+selon (jour):
+    cas 1: ecrire("lundi")
+    cas 6, 7:                      // plusieurs valeurs
+        ecrire("week-end")
+    sinon:                         // facultatif, doit être en dernier
+        ecrire("autre")
+fin
+```
+
+Les valeurs des `cas` sont comparées avec `==` au sujet (nombres, textes, booléens…) ; le premier cas qui correspond est exécuté, sans « passage » au suivant.
+
 ## 7. Boucles
 
 ```
@@ -117,6 +137,9 @@ pour i dans intervalle(10, 0, -2) // 10 8 6 4 2
 pour i dans 5:                    // raccourci de intervalle(5)
 pour fruit dans fruits:           // éléments d'une liste
 pour lettre dans "nck":           // caractères d'un texte
+pour cle dans ages:               // clés d'un dictionnaire
+pour i, fruit dans fruits:        // indice + élément (liste ou texte)
+pour cle, valeur dans ages:       // clé + valeur (dictionnaire)
 ```
 
 `arreter` sort de la boucle, `continuer` passe à l'itération suivante.
@@ -153,7 +176,15 @@ fonction saluer(nom: texte):      // pas de `->` : retourne `rien`
 fin
 
 fonction carre(x: reel) -> reel: retourner x * x    // forme courte
+
+fonction saluer(nom: texte, salut: texte = "Bonjour") -> texte:   // paramètre par défaut
+    retourner f"{salut} {nom}"
+fin
+saluer("Awa")              // Bonjour Awa
+saluer("Awa", "Salut")     // Salut Awa
 ```
+
+Les paramètres avec valeur par défaut doivent être placés en dernier ; la valeur par défaut est évaluée à chaque appel.
 
 - les paramètres doivent être typés ;
 - une fonction avec `-> T` doit retourner une valeur dans **tous** les chemins ;
@@ -344,6 +375,6 @@ Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moin
 
 ## 15. Mots réservés
 
-`variable constante fonction classe herite essayer attraper enfin lever importer depuis comme retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe herite essayer attraper enfin lever importer depuis comme retourner si sinon selon cas tantque pour dans fin arreter continuer et ou non vrai faux nul`
 
 `soi` est défini automatiquement dans les méthodes.

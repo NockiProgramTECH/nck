@@ -6,7 +6,7 @@ from .erreurs import ErreurLexicale
 MOTS_CLES = {
     "variable", "constante", "fonction", "retourner",
     "si", "sinon", "tantque", "pour", "dans", "fin",
-    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme",
+    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme", "selon", "cas",
     "et", "ou", "non",
     "vrai", "faux", "nul",
 }
@@ -99,6 +99,72 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
             brut = source[i:j].replace("_", "")
             jetons.append(Jeton("nombre", float(brut) if est_reel else int(brut), l0, c0))
             i = j
+            continue
+
+        # Textes formatés : f"Bonjour {nom}"
+        if c == "f" and i + 1 < n and source[i + 1] in "\"'":
+            l0, c0 = ligne, col()
+            quote = source[i + 1]
+            i += 2
+            parties: list = []          # str (texte brut) ou tuple (code, ligne, colonne)
+            courant: list[str] = []
+            while True:
+                if i >= n or source[i] == "\n":
+                    raise ErreurLexicale("texte formaté non fermé", l0, c0, fichier)
+                ch = source[i]
+                if ch == quote:
+                    i += 1
+                    break
+                if ch == "\\":
+                    i += 1
+                    if i >= n:
+                        raise ErreurLexicale("texte formaté non fermé", l0, c0, fichier)
+                    courant.append(ECHAPPEMENTS.get(source[i], "\\" + source[i]))
+                    i += 1
+                    continue
+                if ch == "{":
+                    if source.startswith("{{", i):
+                        courant.append("{")
+                        i += 2
+                        continue
+                    if courant:
+                        parties.append("".join(courant))
+                        courant = []
+                    lc, cc = ligne, col() + 1
+                    i += 1
+                    debut, prof = i, 1
+                    while i < n and source[i] != "\n":
+                        if source[i] in "\"'":           # saute les textes imbriqués
+                            q = source[i]
+                            i += 1
+                            while i < n and source[i] not in (q, "\n"):
+                                i += 1
+                        elif source[i] == "{":
+                            prof += 1
+                        elif source[i] == "}":
+                            prof -= 1
+                            if prof == 0:
+                                break
+                        i += 1
+                    if i >= n or source[i] != "}":
+                        raise ErreurLexicale("'}' manquant dans le texte formaté", lc, cc - 1, fichier)
+                    code = source[debut:i]
+                    if not code.strip():
+                        raise ErreurLexicale("expression vide entre { } dans le texte formaté", lc, cc - 1, fichier)
+                    parties.append((code, lc, cc))
+                    i += 1
+                    continue
+                if ch == "}":
+                    if source.startswith("}}", i):
+                        courant.append("}")
+                        i += 2
+                        continue
+                    raise ErreurLexicale("'}' seul dans un texte formaté : écrivez '}}' pour un '}' littéral", ligne, col(), fichier)
+                courant.append(ch)
+                i += 1
+            if courant:
+                parties.append("".join(courant))
+            jetons.append(Jeton("ftexte", parties, l0, c0))
             continue
 
         # Identifiants et mots-clés

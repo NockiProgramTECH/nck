@@ -18,9 +18,15 @@ class Type:
 class TypeFonction(Type):
     parametres: tuple[Type, ...] = field(default_factory=tuple)
     retour: Type = None  # type: ignore[assignment]
+    obligatoires: int = -1      # nombre de paramètres sans valeur par défaut (-1 : tous)
+
+    @property
+    def minimum(self) -> int:
+        return len(self.parametres) if self.obligatoires < 0 else self.obligatoires
 
     def __str__(self) -> str:
-        return f"fonction({', '.join(map(str, self.parametres))}) -> {self.retour}"
+        params = [str(p) + ("?" if i >= self.minimum else "") for i, p in enumerate(self.parametres)]
+        return f"fonction({', '.join(params)}) -> {self.retour}"
 
 
 @dataclass(frozen=True)
@@ -123,9 +129,11 @@ def compatible(source: Type, cible: Type) -> bool:
     if isinstance(source, TypeClasse) and isinstance(cible, TypeClasse):
         return source.herite_de(cible.nom)
     if isinstance(source, TypeFonction) and isinstance(cible, TypeFonction):
-        if len(source.parametres) != len(cible.parametres):
+        # la source doit accepter tous les appels valides pour la cible
+        n = len(cible.parametres)
+        if source.minimum > cible.minimum or len(source.parametres) < n:
             return False
-        return (all(compatible(c, s) for s, c in zip(source.parametres, cible.parametres))
+        return (all(compatible(c, s) for s, c in zip(source.parametres[:n], cible.parametres))
                 and compatible(source.retour, cible.retour))
     return False
 

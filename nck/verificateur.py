@@ -5,7 +5,7 @@ import os
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
     DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
-    Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
+    Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
 from .modules import Chargeur, Module
@@ -187,13 +187,18 @@ class Verificateur:
         # 3. signatures des fonctions
         for instr in instructions:
             if isinstance(instr, DeclFonction):
-                t = TypeFonction(
-                    "fonction", (),
-                    tuple(self.resoudre_type(p.type_annot) for p in instr.parametres),
-                    self.resoudre_type(instr.type_retour),
-                )
+                t = self._type_fonction(instr)
                 instr.type = t  # type: ignore[attr-defined]
                 self.declarer(instr.nom, t, instr, constante=True)
+
+    def _type_fonction(self, f: DeclFonction) -> TypeFonction:
+        obligatoires = sum(1 for p in f.parametres if p.defaut is None)
+        return TypeFonction(
+            "fonction", (),
+            tuple(self.resoudre_type(p.type_annot) for p in f.parametres),
+            self.resoudre_type(f.type_retour),
+            obligatoires,
+        )
 
     def _signatures_classe(self, c: DeclClasse) -> None:
         info: InfoClasse = c.info  # type: ignore[attr-defined]
@@ -221,8 +226,7 @@ class Verificateur:
             if m.nom in info.champs:
                 raise self.erreur(f"'{m.nom}' est déjà un champ : impossible d'avoir une méthode du même nom", m)
             noms.add(m.nom)
-            t = TypeFonction("fonction", (), tuple(self.resoudre_type(p.type_annot) for p in m.parametres),
-                             self.resoudre_type(m.type_retour))
+            t = self._type_fonction(m)
             if m.nom == "valider" and (t.parametres or t.retour != RIEN):
                 raise self.erreur("la méthode spéciale 'valider' ne prend aucun paramètre et ne retourne rien", m)
             ancienne = info.methodes.get(m.nom)
@@ -371,7 +375,19 @@ class Verificateur:
             raise self.erreur(f"impossible de parcourir une valeur de type {t_it}", p.iterable)
         p.type_iterable = t_it  # type: ignore[attr-defined]
         self.ouvrir()
-        self.declarer(p.variable, t_var, p)
+        if p.variable2 is not None:
+            if est_dico(t_it):
+                t1, t2 = cle_de(t_it), valeur_de(t_it)       # pour cle, valeur dans dico
+            elif t_it == QUELCONQUE:
+                t1, t2 = QUELCONQUE, QUELCONQUE
+            else:
+                t1, t2 = ENTIER, t_var                         # pour indice, element dans liste/texte
+            if p.variable == p.variable2:
+                raise self.erreur(f"les deux variables de la boucle ont le même nom '{p.variable}'", p)
+            self.declarer(p.variable, t1, p)
+            self.declarer(p.variable2, t2, p)
+        else:
+            self.declarer(p.variable, t_var, p)
         self.profondeur_boucle += 1
         self.bloc(p.corps)
         self.profondeur_boucle -= 1
@@ -385,6 +401,11 @@ class Verificateur:
 
     def _verifier_fonction(self, f: DeclFonction, soi: TypeClasse | None = None) -> bool:
         t: TypeFonction = f.type  # type: ignore[attr-defined]
+        for p, tp in zip(f.parametres, t.parametres):
+            if p.defaut is not None:
+                td = self.expression(p.defaut)
+                if not compatible(td, tp):
+                    raise self.erreur(f"la valeur par défaut du paramètre '{p.nom}' doit être un {tp}, mais c'est un {td}", p.defaut)
         ancien_retour, ancienne_boucle = self.type_retour_attendu, self.profondeur_boucle
         self.type_retour_attendu = t.retour
         self.profondeur_boucle = 0
@@ -460,6 +481,21 @@ class Verificateur:
             self.declarer(alias, TypeModule(m.nom, (), m.chemin), imp, constante=True)
         return False
 
+    def i_Selon(self, s: Selon) -> bool:
+        t = self.expression(s.sujet)
+        if t == RIEN:
+            raise self.erreur("'selon' ne peut pas porter sur une valeur de type 'rien'", s.sujet)
+        termine = True
+        for c in s.cas:
+            for v in c.valeurs:
+                tv = self.expression(v)
+                if t != QUELCONQUE and tv != QUELCONQUE and not compatible(tv, t) and not compatible(t, tv):
+                    raise self.erreur(f"ce 'cas' ({tv}) ne peut jamais correspondre à un {t}", v)
+            termine = self.bloc(c.corps) and termine
+        if s.sinon is None:
+            return False
+        return self.bloc(s.sinon) and termine
+
     def i_Essayer(self, e: Essayer) -> bool:
         termine = self.bloc(e.corps)
         for cl in e.clauses:
@@ -516,6 +552,13 @@ class Verificateur:
             return ENTIER
         if isinstance(v, float):
             return REEL
+        return TEXTE
+
+    def e_TexteFormate(self, t: TexteFormate) -> Type:
+        for partie in t.parties:
+            if not isinstance(partie, str):
+                if self.expression(partie) == RIEN:
+                    raise self.erreur("cette expression ne produit aucune valeur (type 'rien')", partie)
         return TEXTE
 
     def e_ListeLit(self, l: ListeLit) -> Type:
@@ -721,10 +764,11 @@ class Verificateur:
             return QUELCONQUE
         if not isinstance(tc, TypeFonction):
             raise self.erreur(f"une valeur de type {tc} ne peut pas être appelée comme une fonction", a)
-        nom = a.cible.nom if isinstance(a.cible, Identifiant) else "la fonction"
-        if len(types) != len(tc.parametres):
-            raise self.erreur(
-                f"'{nom}' attend {len(tc.parametres)} argument(s), mais {len(types)} fourni(s)", a)
+        nom = a.cible.nom if isinstance(a.cible, Identifiant) else a.cible.nom if isinstance(a.cible, Membre) else "la fonction"
+        if not (tc.minimum <= len(types) <= len(tc.parametres)):
+            attendu = (f"{len(tc.parametres)}" if tc.minimum == len(tc.parametres)
+                       else f"entre {tc.minimum} et {len(tc.parametres)}")
+            raise self.erreur(f"'{nom}' attend {attendu} argument(s), mais {len(types)} fourni(s)", a)
         verifs = []
         for i, (arg, t, tp) in enumerate(zip(a.arguments, types, tc.parametres), 1):
             if not compatible(t, tp):

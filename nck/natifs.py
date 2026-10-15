@@ -123,11 +123,12 @@ class ModuleNck:
 class FonctionNck:
     """Fonction définie par l'utilisateur (remplie par l'interpréteur)."""
 
-    __slots__ = ("nom", "appeler", "arite")
+    __slots__ = ("nom", "appeler", "arite", "arite_min")
 
     def __init__(self, nom: str, arite: int, appeler: Callable):
         self.nom = nom
-        self.arite = arite
+        self.arite = arite          # nombre maximum d'arguments (-1 : variable)
+        self.arite_min = arite      # nombre minimum d'arguments
         self.appeler = appeler
 
     def __call__(self, *args):
