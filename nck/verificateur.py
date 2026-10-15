@@ -1,16 +1,30 @@
 """Vérificateur de types statique : annote l'AST et signale les erreurs avant l'exécution."""
 
 from .arbre import (
-    Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclFonction, DeclVariable,
-    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Pour,
+    Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
+    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Membre, Pour,
     Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
 from .natifs import NATIFS
 from .types_nck import (
     BOOLEEN, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_SIMPLES,
-    Type, TypeFonction, compatible, element_de, est_liste, est_numerique, liste_de, unifier,
+    Type, TypeClasse, TypeFonction, compatible, element_de, est_liste, est_numerique, liste_de, unifier,
 )
+
+TYPE_META_CLASSE = Type("classe")   # type du symbole qui désigne une classe (ex : `Personne`)
+
+
+class InfoClasse:
+    def __init__(self, nom: str, type_: TypeClasse, parent: "InfoClasse | None", noeud: DeclClasse):
+        self.nom = nom
+        self.type = type_
+        self.parent = parent
+        self.noeud = noeud
+        self.champs: dict[str, Type] = {}
+        self.defauts: set[str] = set()
+        self.methodes: dict[str, TypeFonction] = {}
+        self.prete = False
 
 
 class Symbole:
@@ -56,6 +70,7 @@ class Verificateur:
         self.portee = Portee()
         self.type_retour_attendu: Type | None = None
         self.profondeur_boucle = 0
+        self.classes: dict[str, InfoClasse] = {}
         for nom in NATIFS:
             self.portee.symboles[nom] = Symbole(Type("natif"), constante=True)
 
@@ -76,6 +91,10 @@ class Verificateur:
             if len(annot.params) != 1:
                 raise self.erreur("'liste' prend exactement un paramètre, ex : liste<entier>", annot)
             return liste_de(self.resoudre_type(annot.params[0]))
+        if nom in self.classes:
+            if annot.params:
+                raise self.erreur(f"la classe '{nom}' ne prend pas de paramètre de type", annot)
+            return self.classes[nom].type
         if nom == "fonction":
             if not annot.params:
                 raise self.erreur("un type fonction s'écrit fonction<param1, param2, retour>", annot)
@@ -111,7 +130,26 @@ class Verificateur:
             self.instruction(instr)
 
     def pre_declarer_fonctions(self, instructions: list[Instr]) -> None:
-        """Les fonctions sont visibles dans tout leur bloc, même avant leur définition."""
+        """Les fonctions et classes sont visibles dans tout leur bloc, même avant leur définition."""
+        # 1. noms des classes (une classe parente doit être déclarée avant ses enfants)
+        for instr in instructions:
+            if isinstance(instr, DeclClasse):
+                parent = None
+                if instr.parent is not None:
+                    parent = self.classes.get(instr.parent)
+                    if parent is None:
+                        raise self.erreur(
+                            f"classe parente '{instr.parent}' inconnue (elle doit être déclarée avant '{instr.nom}')", instr)
+                ancetres = (parent.nom, *parent.type.ancetres) if parent else ()
+                info = InfoClasse(instr.nom, TypeClasse(instr.nom, (), ancetres), parent, instr)
+                self.declarer(instr.nom, TYPE_META_CLASSE, instr, constante=True)
+                self.classes[instr.nom] = info
+                instr.info = info  # type: ignore[attr-defined]
+        # 2. champs et signatures des méthodes (peuvent référencer n'importe quelle classe du bloc)
+        for instr in instructions:
+            if isinstance(instr, DeclClasse):
+                self._signatures_classe(instr)
+        # 3. signatures des fonctions
         for instr in instructions:
             if isinstance(instr, DeclFonction):
                 t = TypeFonction(
@@ -122,7 +160,58 @@ class Verificateur:
                 instr.type = t  # type: ignore[attr-defined]
                 self.declarer(instr.nom, t, instr, constante=True)
 
+    def _signatures_classe(self, c: DeclClasse) -> None:
+        info: InfoClasse = c.info  # type: ignore[attr-defined]
+        if info.parent is not None:
+            info.champs = dict(info.parent.champs)
+            info.defauts = set(info.parent.defauts)
+            info.methodes = dict(info.parent.methodes)
+        for champ in c.champs:
+            if champ.nom in info.champs:
+                origine = "la classe parente" if info.parent and champ.nom in info.parent.champs else "cette classe"
+                raise self.erreur(f"le champ '{champ.nom}' est déjà défini dans {origine}", champ)
+            if champ.nom in info.methodes:
+                raise self.erreur(f"'{champ.nom}' est déjà une méthode de la classe parente", champ)
+            t = self.resoudre_type(champ.type_annot)
+            if t == RIEN:
+                raise self.erreur("un champ ne peut pas être de type 'rien'", champ.type_annot)
+            info.champs[champ.nom] = t
+            champ.type = t  # type: ignore[attr-defined]
+            if champ.defaut is not None:
+                info.defauts.add(champ.nom)
+        noms = set()
+        for m in c.methodes:
+            if m.nom in noms:
+                raise self.erreur(f"la méthode '{m.nom}' est définie deux fois", m)
+            if m.nom in info.champs:
+                raise self.erreur(f"'{m.nom}' est déjà un champ : impossible d'avoir une méthode du même nom", m)
+            noms.add(m.nom)
+            t = TypeFonction("fonction", (), tuple(self.resoudre_type(p.type_annot) for p in m.parametres),
+                             self.resoudre_type(m.type_retour))
+            if m.nom == "valider" and (t.parametres or t.retour != RIEN):
+                raise self.erreur("la méthode spéciale 'valider' ne prend aucun paramètre et ne retourne rien", m)
+            ancienne = info.methodes.get(m.nom)
+            if ancienne is not None and not compatible(t, ancienne):
+                raise self.erreur(
+                    f"la méthode '{m.nom}' ({t}) n'est pas compatible avec celle de la classe parente ({ancienne})", m)
+            info.methodes[m.nom] = t
+            m.type = t  # type: ignore[attr-defined]
+        info.prete = True
+
     # ----- instructions -----
+
+    def i_DeclClasse(self, c: DeclClasse) -> bool:
+        info: InfoClasse = c.info  # type: ignore[attr-defined]
+        for champ in c.champs:
+            if champ.defaut is not None:
+                t = self.expression(champ.defaut)
+                if not compatible(t, champ.type):  # type: ignore[attr-defined]
+                    raise self.erreur(
+                        f"le champ '{champ.nom}' est de type {champ.type}, mais sa valeur par défaut est un {t}",  # type: ignore[attr-defined]
+                        champ.defaut)
+        for m in c.methodes:
+            self._verifier_fonction(m, soi=info.type)
+        return False
 
     def bloc(self, bloc: Bloc) -> bool:
         """Vérifie un bloc. Retourne True si le bloc termine toujours (retourner/arreter/continuer)."""
@@ -174,6 +263,11 @@ class Verificateur:
             if a.op != "=" and not sym.initialisee:
                 raise self.erreur(f"'{a.cible.nom}' est utilisée avant d'avoir reçu une valeur", a.cible)
             sym.initialisee = True
+        elif isinstance(a.cible, Membre):
+            t_cible = self.expression(a.cible)
+            t_obj = a.cible.objet.type  # type: ignore[attr-defined]
+            if isinstance(t_obj, TypeClasse) and a.cible.nom in self.classes[t_obj.nom].methodes:
+                raise self.erreur(f"'{a.cible.nom}' est une méthode : impossible de la modifier", a.cible)
         else:
             assert isinstance(a.cible, Index)
             t_cible = self.expression(a.cible)
@@ -241,15 +335,19 @@ class Verificateur:
         return False
 
     def i_DeclFonction(self, f: DeclFonction) -> bool:
-        t: TypeFonction = getattr(f, "type", None)  # type: ignore[assignment]
-        if t is None:  # fonction non pré-déclarée (ne devrait pas arriver)
+        if getattr(f, "type", None) is None:  # fonction non pré-déclarée (ne devrait pas arriver)
             self.pre_declarer_fonctions([f])
-            t = f.type  # type: ignore[attr-defined]
+        return self._verifier_fonction(f)
+
+    def _verifier_fonction(self, f: DeclFonction, soi: TypeClasse | None = None) -> bool:
+        t: TypeFonction = f.type  # type: ignore[attr-defined]
         ancien_retour, ancienne_boucle = self.type_retour_attendu, self.profondeur_boucle
         self.type_retour_attendu = t.retour
         self.profondeur_boucle = 0
         self.ouvrir(nouvelle_fonction=True)
         noms = set()
+        if soi is not None:
+            self.declarer("soi", soi, f, constante=True)
         for p, tp in zip(f.parametres, t.parametres):
             if p.nom in noms:
                 raise self.erreur(f"paramètre '{p.nom}' en double", p)
@@ -415,7 +513,57 @@ class Verificateur:
             return QUELCONQUE
         raise self.erreur(f"impossible d'indexer une valeur de type {tc}", i)
 
+    def e_Membre(self, m: Membre) -> Type:
+        t = self.expression(m.objet)
+        if t == QUELCONQUE:
+            return QUELCONQUE
+        if not isinstance(t, TypeClasse):
+            raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}')", m)
+        info = self.classes[t.nom]
+        if m.nom in info.champs:
+            return info.champs[m.nom]
+        if m.nom in info.methodes:
+            return info.methodes[m.nom]
+        proches = [n for n in list(info.champs) + list(info.methodes) if n.lower() == m.nom.lower()]
+        aide = f" (vouliez-vous dire '{proches[0]}' ?)" if proches else ""
+        raise self.erreur(f"la classe '{t.nom}' n'a pas de champ ni de méthode '{m.nom}'{aide}", m)
+
+    def e_Construction(self, a: Appel, info: InfoClasse) -> Type:
+        a.cible.type = TYPE_META_CLASSE  # type: ignore[attr-defined]
+        a.natif = None  # type: ignore[attr-defined]
+        a.classe = info.nom  # type: ignore[attr-defined]
+        noms_champs = list(info.champs)
+        if len(a.arguments) > len(noms_champs):
+            raise self.erreur(
+                f"'{info.nom}' a {len(noms_champs)} champ(s), mais {len(a.arguments)} argument(s) fourni(s)", a)
+        fournis: dict[str, Expr] = {}
+        for nom, arg in zip(noms_champs, a.arguments):
+            fournis[nom] = arg
+        for nom, arg in a.nommes:
+            if nom not in info.champs:
+                raise self.erreur(f"la classe '{info.nom}' n'a pas de champ '{nom}'", arg)
+            if nom in fournis:
+                raise self.erreur(f"le champ '{nom}' est fourni deux fois", arg)
+            fournis[nom] = arg
+        manquants = [n for n in noms_champs if n not in fournis and n not in info.defauts]
+        if manquants:
+            raise self.erreur(
+                f"il manque le(s) champ(s) obligatoire(s) {', '.join(repr(n) for n in manquants)} pour créer un '{info.nom}'", a)
+        for nom, arg in fournis.items():
+            t = self.expression(arg)
+            if not compatible(t, info.champs[nom]):
+                raise self.erreur(f"champ '{nom}' de '{info.nom}' : {info.champs[nom]} attendu, mais {t} fourni", arg)
+        a.champs_fournis = fournis  # type: ignore[attr-defined]
+        return info.type
+
     def e_Appel(self, a: Appel) -> Type:
+        if isinstance(a.cible, Identifiant):
+            sym = self.portee.chercher(a.cible.nom)
+            if sym is not None and sym.type == TYPE_META_CLASSE and a.cible.nom in self.classes:
+                return self.e_Construction(a, self.classes[a.cible.nom])
+        if a.nommes:
+            raise self.erreur("les arguments nommés ('nom = valeur') ne sont possibles que pour créer un objet "
+                              "(ex : Personne(nom = \"Awa\"))", a.nommes[0][1])
         if isinstance(a.cible, Identifiant) and a.cible.nom in NATIFS and self.portee.chercher(a.cible.nom).type == Type("natif"):
             natif = NATIFS[a.cible.nom]
             a.cible.type = Type("natif")  # type: ignore[attr-defined]

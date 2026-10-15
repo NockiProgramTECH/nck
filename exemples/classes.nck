@@ -1,0 +1,44 @@
+// Programmation orientée objet en NCK
+classe Personne:
+    nom: texte
+    age: entier = 0                      // valeur par défaut
+
+    fonction saluer() -> texte:
+        retourner "Bonjour, je suis " + soi.nom
+    fin
+
+    fonction vieillir(annees: entier):
+        soi.age += annees
+    fin
+
+    fonction valider():                  // appelée automatiquement à la création
+        si (soi.age < 0): verifier(faux, "l'âge ne peut pas être négatif")
+    fin
+fin
+
+classe Etudiant herite Personne:
+    ecole: texte = "Université de Ouagadougou"
+
+    fonction saluer() -> texte:          // redéfinition
+        retourner "Bonjour, je suis " + soi.nom + ", étudiant à " + soi.ecole
+    fin
+fin
+
+variable awa = Personne("Awa", 20)
+variable ali = Personne(nom = "Ali")          // age = 0 par défaut
+variable issa = Etudiant("Issa", 22, "ISGE")
+
+awa.vieillir(1)
+ecrire(awa)                                   // Personne(nom="Awa", age=21)
+ecrire(ali.saluer())
+ecrire(issa.saluer())
+
+// Un Etudiant est aussi une Personne
+variable groupe: liste<Personne> = [awa, ali, issa]
+pour p dans groupe: ecrire("-", p.nom, "a", p.age, "ans")
+
+// Les erreurs sont détectées à la compilation...
+// awa.nom = 42                 -> Erreur de type : impossible d'affecter un entier à une cible de type texte
+// Personne()                   -> Erreur de type : il manque le(s) champ(s) obligatoire(s) 'nom'
+// ...ou à l'exécution (validation) :
+// Personne("X", -5)            -> Erreur d'exécution : l'âge ne peut pas être négatif

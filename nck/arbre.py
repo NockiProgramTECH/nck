@@ -59,6 +59,13 @@ class Logique(Noeud):
 class Appel(Noeud):
     cible: "Expr"
     arguments: list["Expr"]
+    nommes: list[tuple[str, "Expr"]] = field(default_factory=list)   # Personne(nom = "Awa")
+
+
+@dataclass
+class Membre(Noeud):
+    objet: "Expr"
+    nom: str
 
 
 @dataclass
@@ -67,7 +74,7 @@ class Index(Noeud):
     index: "Expr"
 
 
-Expr = Litteral | ListeLit | Identifiant | Unaire | Binaire | Logique | Appel | Index
+Expr = Litteral | ListeLit | Identifiant | Unaire | Binaire | Logique | Appel | Index | Membre
 
 
 # ---------- Instructions ----------
@@ -132,6 +139,21 @@ class DeclFonction(Noeud):
 
 
 @dataclass
+class Champ(Noeud):
+    nom: str
+    type_annot: TypeAnnot
+    defaut: Optional[Expr]
+
+
+@dataclass
+class DeclClasse(Noeud):
+    nom: str
+    parent: Optional[str]
+    champs: list[Champ]
+    methodes: list[DeclFonction]
+
+
+@dataclass
 class Retourner(Noeud):
     valeur: Optional[Expr]
 
@@ -147,7 +169,7 @@ class Continuer(Noeud):
 
 
 Instr = (DeclVariable | Affectation | ExprInstr | Bloc | Si | TantQue | Pour
-         | DeclFonction | Retourner | Arreter | Continuer)
+         | DeclFonction | DeclClasse | Retourner | Arreter | Continuer)
 
 
 @dataclass

@@ -49,6 +49,7 @@ Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instruct
 | `booleen`          | `vrai`, `faux`                   | valeur logique                           |
 | `liste<T>`         | `[1, 2, 3]`, `liste<texte>`      | liste d'éléments de type `T`             |
 | `fonction<A, B, R>`| `fonction<entier, entier, entier>` | fonction prenant `A, B` et renvoyant `R` |
+| `NomDeClasse`      | `Personne`                       | instance d'une classe (voir §9)          |
 | `quelconque`       | —                                | n'importe quelle valeur (vérifiée à l'exécution) |
 | `rien`             | —                                | type de retour d'une fonction sans valeur |
 | `nul`              | `nul`                            | absence de valeur                        |
@@ -144,7 +145,61 @@ fonction double(n: entier) -> entier: retourner n * 2
 ecrire(appliquer(double, 21))   // 42
 ```
 
-## 9. Fonctions natives
+## 9. Classes (programmation orientée objet)
+
+Une classe regroupe des **champs typés** (avec valeur par défaut facultative) et des **méthodes**.
+Le constructeur est généré automatiquement à partir des champs, comme avec Pydantic.
+
+```
+classe Personne:
+    nom: texte
+    age: entier = 0                       // champ facultatif grâce à la valeur par défaut
+
+    fonction saluer() -> texte:
+        retourner "Bonjour, je suis " + soi.nom
+    fin
+
+    fonction vieillir(annees: entier):
+        soi.age += annees
+    fin
+
+    fonction valider():                   // facultatif : appelée automatiquement à la création
+        verifier(soi.age >= 0, "l'âge ne peut pas être négatif")
+    fin
+fin
+
+variable awa = Personne("Awa", 20)        // arguments dans l'ordre des champs
+variable ali = Personne(nom = "Ali")      // ou nommés ; age vaut 0
+awa.vieillir(1)
+ecrire(awa.nom, awa.saluer())
+ecrire(awa)                               // Personne(nom="Awa", age=21)
+```
+
+- Dans une méthode, `soi` désigne l'objet courant (comme `self` / `this`).
+- Les champs obligatoires manquants, les champs inconnus et les mauvais types sont des **erreurs de compilation**.
+- À la création, chaque champ est aussi vérifié à l'exécution (utile quand une valeur vient de `quelconque` ou de `lire`), puis `valider()` est appelée si elle existe.
+- Une méthode `texte() -> texte` personnalise l'affichage par `ecrire` / `texte(obj)`.
+- Les objets sont comparés par identité (`==` est vrai seulement pour le même objet) et passés par référence.
+- Une méthode peut être stockée dans une variable : `variable f = awa.saluer ; f()`.
+
+### Héritage
+
+```
+classe Etudiant herite Personne:
+    ecole: texte = "Université de Ouagadougou"
+
+    fonction saluer() -> texte:            // redéfinition (la signature doit rester compatible)
+        retourner soi.nom + ", étudiant à " + soi.ecole
+    fin
+fin
+
+variable issa = Etudiant("Issa", 22, "ISGE")   // champs du parent d'abord, puis les siens
+variable groupe: liste<Personne> = [awa, issa] // un Etudiant est une Personne
+```
+
+La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas redéclarer un champ du parent.
+
+## 10. Fonctions natives
 
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
@@ -174,7 +229,7 @@ ecrire(appliquer(double, 21))   // 42
 - `horloge()` → secondes (chronométrage), `attendre(secondes)`, `quitter(code?)`
 - `verifier(condition, message?)` — stoppe le programme si la condition est fausse
 
-## 10. Erreurs
+## 11. Erreurs
 
 Trois familles, toutes avec ligne et colonne :
 
@@ -190,6 +245,8 @@ Erreur d'exécution : division par zéro
 
 Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moindre ligne.
 
-## 11. Mots réservés
+## 12. Mots réservés
 
-`variable constante fonction retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe herite retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
+
+`soi` est défini automatiquement dans les méthodes.

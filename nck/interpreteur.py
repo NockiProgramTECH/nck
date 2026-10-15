@@ -8,12 +8,12 @@ import sys
 from typing import Callable
 
 from .arbre import (
-    Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclFonction, DeclVariable,
-    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Pour,
+    Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
+    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Membre, Pour,
     Programme, Retourner, Si, TantQue, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
-from .natifs import NATIFS, FonctionNck, nom_type_valeur, vers_texte
+from .natifs import NATIFS, ClasseNck, FonctionNck, ObjetNck, nom_type_valeur, vers_texte
 from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, est_liste, valeur_compatible
 
 
@@ -93,8 +93,9 @@ class Interpreteur:
     def compiler_instructions(self, instructions: list[Instr]) -> Fn:
         # Les fonctions sont « hissées » : elles existent dès le début de leur bloc,
         # ce qui permet de les appeler avant leur définition (comme l'autorise le vérificateur).
-        ordonnees = ([i for i in instructions if isinstance(i, DeclFonction)]
-                     + [i for i in instructions if not isinstance(i, DeclFonction)])
+        ordonnees = ([i for i in instructions if isinstance(i, DeclClasse)]
+                     + [i for i in instructions if isinstance(i, DeclFonction)]
+                     + [i for i in instructions if not isinstance(i, (DeclFonction, DeclClasse))])
         fns = [self.instruction(i) for i in ordonnees]
         if len(fns) == 1:
             return fns[0]
@@ -162,6 +163,28 @@ class Interpreteur:
                     e = e.parent
                 raise KeyError(nom)
             return aff_composee
+
+        if isinstance(a.cible, Membre):
+            objet = self.expression(a.cible.objet)
+            champ = a.cible.nom
+            noeud_m = a.cible
+
+            def obtenir_objet(env):
+                o = objet(env)
+                if not isinstance(o, ObjetNck) or champ not in o.champs:
+                    raise self.erreur(f"un {nom_type_valeur(o)} n'a pas de champ '{champ}'", noeud_m)
+                return o
+
+            if op == "=":
+                def aff_membre(env):
+                    obtenir_objet(env).champs[champ] = val(env)
+                return aff_membre
+            binop = self.operateur_binaire(op[0], a, a.cible.type, a.valeur.type)  # type: ignore[attr-defined]
+
+            def aff_membre_composee(env):
+                o = obtenir_objet(env)
+                o.champs[champ] = binop(o.champs[champ], val(env))
+            return aff_membre_composee
 
         assert isinstance(a.cible, Index)
         conteneur = self.expression(a.cible.cible)
@@ -267,9 +290,70 @@ class Interpreteur:
                     break
         return pour_controle
 
+    def i_DeclClasse(self, c: DeclClasse) -> Fn:
+        info = c.info  # type: ignore[attr-defined]
+        nom = c.nom
+        parent_nom = c.parent
+        defauts = {ch.nom: self.expression(ch.defaut) for ch in c.champs if ch.defaut is not None}
+        types_champs = {ch.nom: ch.type for ch in c.champs}  # type: ignore[attr-defined]
+        fabriques = {m.nom: self.fabrique_fonction(m, methode=True) for m in c.methodes}
+        erreur = self.erreur
+
+        def decl(env):
+            classe = ClasseNck(nom, info.type.ancetres)
+            if parent_nom is not None:
+                parent: ClasseNck = env.chercher(parent_nom)
+                classe.champs = list(parent.champs)
+                classe.types_champs = dict(parent.types_champs)
+                classe.defauts = dict(parent.defauts)
+                classe.methodes = dict(parent.methodes)
+            classe.champs += [ch.nom for ch in c.champs]
+            classe.types_champs.update(types_champs)
+            for k, f in defauts.items():
+                classe.defauts[k] = (lambda f=f: f(env))
+            for k, fab in fabriques.items():
+                classe.methodes[k] = fab(env).appeler
+            champs = classe.champs
+            tchamps = classe.types_champs
+            dflt = classe.defauts
+            valider = classe.methodes.get("valider")
+
+            def construire(*args, **nommes):
+                valeurs = dict(zip(champs, args))
+                valeurs.update(nommes)
+                obj = {}
+                for k in champs:
+                    if k in valeurs:
+                        v = valeurs[k]
+                    elif k in dflt:
+                        v = dflt[k]()
+                    else:
+                        raise ErreurExecution(f"il manque le champ obligatoire '{k}' pour créer un '{nom}'")
+                    if not valeur_compatible(v, tchamps[k]):
+                        raise ErreurExecution(
+                            f"champ '{k}' de '{nom}' : {tchamps[k]} attendu, mais {nom_type_valeur(v)} reçu ({vers_texte(v)})")
+                    obj[k] = v
+                o = ObjetNck(classe, obj)
+                if valider is not None:
+                    valider(o)
+                return o
+
+            classe.construire = construire
+            env.vars[nom] = classe
+        return decl
+
     def i_DeclFonction(self, f: DeclFonction) -> Fn:
+        fabriquer = self.fabrique_fonction(f)
+        nom = f.nom
+
+        def decl(env):
+            env.vars[nom] = fabriquer(env)
+        return decl
+
+    def fabrique_fonction(self, f: DeclFonction, methode: bool = False):
+        """Retourne `fabriquer(env_def) -> FonctionNck`. Une méthode reçoit l'objet (`soi`) en premier argument."""
         corps = self.compiler_instructions(f.corps.instructions)
-        noms = [p.nom for p in f.parametres]
+        noms = (["soi"] if methode else []) + [p.nom for p in f.parametres]
         nom = f.nom
         a_retour = _contient_retour(f.corps)
         limite = self.limite_recursion
@@ -296,9 +380,7 @@ class Interpreteur:
                     profondeur[0] -= 1
             return FonctionNck(nom, len(noms), appeler)
 
-        def decl(env):
-            env.vars[nom] = fabriquer(env)
-        return decl
+        return fabriquer
 
     def i_Retourner(self, r: Retourner) -> Fn:
         if r.valeur is None:
@@ -491,10 +573,62 @@ class Interpreteur:
                 raise erreur(f"index {k} hors limites ({genre} a {len(c)} élément(s))", i.index) from None
         return indexer
 
+    def e_Membre(self, m: Membre) -> Fn:
+        objet = self.expression(m.objet)
+        nom = m.nom
+        erreur = self.erreur
+
+        def membre(env):
+            o = objet(env)
+            if isinstance(o, ObjetNck):
+                champs = o.champs
+                if nom in champs:
+                    return champs[nom]
+                meth = o.classe.methodes.get(nom)
+                if meth is not None:
+                    return FonctionNck(f"{o.classe.nom}.{nom}", -1, lambda *args: meth(o, *args))
+                raise erreur(f"la classe '{o.classe.nom}' n'a pas de champ ni de méthode '{nom}'", m)
+            raise erreur(f"un {nom_type_valeur(o)} n'a pas de champ ni de méthode '{nom}'", m)
+        return membre
+
     def e_Appel(self, a: Appel) -> Fn:
         args = [self.expression(x) for x in a.arguments]
         natif = a.natif  # type: ignore[attr-defined]
         erreur = self.erreur
+
+        classe_nom = getattr(a, "classe", None)
+        if classe_nom is not None:
+            nommes = [(n, self.expression(e)) for n, e in a.nommes]
+            cible_classe = self.expression(a.cible)
+
+            def construire(env):
+                classe = cible_classe(env)
+                try:
+                    return classe.construire(*[f(env) for f in args], **{n: f(env) for n, f in nommes})
+                except ErreurNck as exc:
+                    if exc.ligne == 0:
+                        exc.ligne, exc.colonne, exc.fichier = a.ligne, a.colonne, self.fichier
+                    raise
+            return construire
+
+        if isinstance(a.cible, Membre):
+            # Appel de méthode : évite de créer une fonction liée à chaque appel.
+            objet = self.expression(a.cible.objet)
+            nom_m = a.cible.nom
+            noeud_m = a.cible
+
+            def appel_methode(env):
+                o = objet(env)
+                if isinstance(o, ObjetNck):
+                    meth = o.classe.methodes.get(nom_m)
+                    if meth is not None:
+                        return meth(o, *[g(env) for g in args])
+                    f = o.champs.get(nom_m)
+                    if f is not None:
+                        return self._appeler_valeur(f, [g(env) for g in args], a, nom_m)
+                    raise erreur(f"la classe '{o.classe.nom}' n'a pas de méthode '{nom_m}'", noeud_m)
+                raise erreur(f"un {nom_type_valeur(o)} n'a pas de méthode '{nom_m}'", noeud_m)
+            return appel_methode
 
         def enrichir(exc: ErreurNck):
             if exc.ligne == 0:
@@ -542,19 +676,22 @@ class Interpreteur:
         nom = a.cible.nom if isinstance(a.cible, Identifiant) else "fonction"
 
         def appel(env):
-            f = cible(env)
-            valeurs = [g(env) for g in args]
-            if isinstance(f, FonctionNck):
-                if f.arite != len(valeurs):
-                    raise erreur(f"'{f.nom}' attend {f.arite} argument(s), mais {len(valeurs)} fourni(s)", a)
-                return f.appeler(*valeurs)
-            if callable(f):
-                try:
-                    return f(*valeurs)
-                except ErreurNck as exc:
-                    raise enrichir(exc)
-            raise erreur(f"'{nom}' n'est pas une fonction (c'est un {nom_type_valeur(f)})", a)
+            return self._appeler_valeur(cible(env), [g(env) for g in args], a, nom)
         return appel
+
+    def _appeler_valeur(self, f, valeurs: list, noeud, nom: str):
+        if isinstance(f, FonctionNck):
+            if f.arite >= 0 and f.arite != len(valeurs):
+                raise self.erreur(f"'{f.nom}' attend {f.arite} argument(s), mais {len(valeurs)} fourni(s)", noeud)
+            return f.appeler(*valeurs)
+        if callable(f):
+            try:
+                return f(*valeurs)
+            except ErreurNck as exc:
+                if exc.ligne == 0:
+                    exc.ligne, exc.colonne, exc.fichier = noeud.ligne, noeud.colonne, self.fichier
+                raise
+        raise self.erreur(f"'{nom}' n'est pas une fonction (c'est un {nom_type_valeur(f)})", noeud)
 
 
 # ---------- analyses auxiliaires ----------

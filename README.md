@@ -80,6 +80,23 @@ fin
 ecrire("5! =", factorielle(5))
 ```
 
+Et des classes typées, à la Pydantic :
+
+```
+classe Personne:
+    nom: texte
+    age: entier = 0
+
+    fonction saluer() -> texte:
+        retourner "Bonjour, je suis " + soi.nom
+    fin
+fin
+
+variable awa = Personne("Awa", 20)
+ecrire(awa.saluer(), awa)        // Bonjour, je suis Awa Personne(nom="Awa", age=20)
+Personne()                        // Erreur de type : il manque le(s) champ(s) obligatoire(s) 'nom'
+```
+
 Et quand on se trompe :
 
 ```
@@ -124,6 +141,7 @@ pytest
 ## Feuille de route
 
 - [x] v0.1 — moteur Python : lexeur, parseur, vérificateur de types, interpréteur, REPL
-- [ ] structures typées (`structure Personne: nom: texte ...`) avec validation
+- [x] v0.2 — classes typées avec validation (`classe`, `herite`, `soi`, `valider`)
 - [ ] dictionnaires, `importer` de modules `.nck`
+- [ ] extension VS Code (coloration syntaxique)
 - [ ] réécriture du moteur en C une fois la syntaxe stabilisée

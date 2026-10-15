@@ -23,6 +23,18 @@ class TypeFonction(Type):
         return f"fonction({', '.join(map(str, self.parametres))}) -> {self.retour}"
 
 
+@dataclass(frozen=True)
+class TypeClasse(Type):
+    """Type d'une instance de classe. `ancetres` contient les noms des classes parentes (ordre croissant)."""
+    ancetres: tuple[str, ...] = field(default_factory=tuple)
+
+    def __str__(self) -> str:
+        return self.nom
+
+    def herite_de(self, nom: str) -> bool:
+        return self.nom == nom or nom in self.ancetres
+
+
 ENTIER = Type("entier")
 REEL = Type("reel")
 TEXTE = Type("texte")
@@ -71,6 +83,8 @@ def compatible(source: Type, cible: Type) -> bool:
         if source.params[0].nom == "?" or cible.params[0].nom == "?":
             return True
         return compatible(source.params[0], cible.params[0])
+    if isinstance(source, TypeClasse) and isinstance(cible, TypeClasse):
+        return source.herite_de(cible.nom)
     if isinstance(source, TypeFonction) and isinstance(cible, TypeFonction):
         if len(source.parametres) != len(cible.parametres):
             return False
@@ -83,6 +97,11 @@ def unifier(a: Type, b: Type) -> Type:
     """Type commun de deux valeurs (pour les listes littérales, les branches, ...)."""
     if a == b:
         return a
+    if isinstance(a, TypeClasse) and isinstance(b, TypeClasse):
+        if a.herite_de(b.nom):
+            return b
+        if b.herite_de(a.nom):
+            return a
     if est_numerique(a) and est_numerique(b):
         return REEL
     if est_liste(a) and est_liste(b):
@@ -134,4 +153,7 @@ def valeur_compatible(v: object, t: Type) -> bool:
         return all(valeur_compatible(x, elem) for x in v)
     if isinstance(t, TypeFonction):
         return callable(v)
+    if isinstance(t, TypeClasse):
+        classe = getattr(v, "classe", None)
+        return classe is not None and (classe.nom == t.nom or t.nom in classe.ancetres)
     return True

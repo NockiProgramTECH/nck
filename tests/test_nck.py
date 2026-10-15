@@ -294,3 +294,98 @@ def test_natif_non_redefinissable():
 def test_exemples(nom):
     source = (RACINE / "exemples" / f"{nom}.nck").read_text(encoding="utf-8")
     assert run(source)  # s'exécute sans erreur et produit une sortie
+
+
+# ---------- classes (POO) ----------
+
+CLASSE_P = """
+classe Personne:
+    nom: texte
+    age: entier = 0
+    fonction saluer() -> texte: retourner "Salut " + soi.nom
+    fonction vieillir(n: entier): soi.age += n
+fin
+"""
+
+
+def test_classe_creation_et_champs():
+    src = CLASSE_P + """
+variable p = Personne("Awa", 20)
+variable q = Personne(nom = "Ali")
+p.vieillir(1)
+q.age = 5
+ecrire(p, q.age, p.saluer(), type_de(p))
+"""
+    assert run(src) == 'Personne(nom="Awa", age=21) 5 Salut Awa Personne\n'
+
+
+def test_classe_erreurs_compilation():
+    with pytest.raises(ErreurType, match="obligatoire"):
+        compiler_source(CLASSE_P + "Personne()")
+    with pytest.raises(ErreurType, match="texte attendu, mais entier"):
+        compiler_source(CLASSE_P + "Personne(1)")
+    with pytest.raises(ErreurType, match="n'a pas de champ 'prenom'"):
+        compiler_source(CLASSE_P + 'Personne(prenom = "a")')
+    with pytest.raises(ErreurType, match="n'a pas de champ ni de méthode 'nm'"):
+        compiler_source(CLASSE_P + 'ecrire(Personne("a").nm)')
+    with pytest.raises(ErreurType, match="texte"):
+        compiler_source(CLASSE_P + 'variable p = Personne("a")\np.nom = 1')
+    with pytest.raises(ErreurType, match="méthode"):
+        compiler_source(CLASSE_P + 'variable p = Personne("a")\np.saluer = 1')
+    with pytest.raises(ErreurType, match="arguments nommés"):
+        compiler_source("fonction f(a: entier): ecrire(a)\nf(a = 1)")
+
+
+def test_classe_validation_execution():
+    src = """
+classe Compte:
+    solde: entier
+    fonction valider():
+        verifier(soi.solde >= 0, "solde négatif")
+    fin
+fin
+Compte(-1)
+"""
+    with pytest.raises(ErreurExecution, match="solde négatif"):
+        run(src)
+    with pytest.raises(ErreurExecution, match="texte attendu, mais entier"):
+        run(CLASSE_P + "variable q: quelconque = 3\nPersonne(q)")
+
+
+def test_heritage():
+    src = CLASSE_P + """
+classe Etudiant herite Personne:
+    ecole: texte = "UO"
+    fonction saluer() -> texte: retourner "Etudiant " + soi.nom
+fin
+variable e = Etudiant("Issa", 22)
+variable groupe: liste<Personne> = [Personne("A"), e]
+ecrire(e.saluer(), e.ecole, longueur(groupe), groupe[1].saluer())
+"""
+    assert run(src) == "Etudiant Issa UO 2 Etudiant Issa\n"
+    with pytest.raises(ErreurType, match="déjà défini"):
+        compiler_source(CLASSE_P + "classe E herite Personne:\n    nom: texte\nfin")
+    with pytest.raises(ErreurType, match="pas compatible"):
+        compiler_source(CLASSE_P + "classe E herite Personne:\n    fonction saluer() -> entier: retourner 1\nfin")
+    with pytest.raises(ErreurType, match="parente 'X' inconnue"):
+        compiler_source("classe E herite X:\n    a: entier\nfin")
+
+
+def test_methode_comme_valeur_et_texte_personnalise():
+    src = """
+classe Point:
+    x: entier
+    y: entier
+    fonction texte() -> texte: retourner "(" + texte(soi.x) + ", " + texte(soi.y) + ")"
+    fonction norme2() -> entier: retourner soi.x * soi.x + soi.y * soi.y
+fin
+variable p = Point(3, 4)
+variable f = p.norme2
+ecrire(p, f())
+"""
+    assert run(src) == "(3, 4) 25\n"
+
+
+def test_exemple_classes():
+    source = (RACINE / "exemples" / "classes.nck").read_text(encoding="utf-8")
+    assert "Etudiant" not in run(source).split("\n")[0]

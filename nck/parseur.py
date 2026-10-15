@@ -1,9 +1,9 @@
 """Analyseur syntaxique : transforme les jetons en arbre syntaxique."""
 
 from .arbre import (
-    Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclFonction, DeclVariable,
-    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Parametre,
-    Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
+    Affectation, Appel, Arreter, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
+    DeclVariable, ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique,
+    Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -134,6 +134,8 @@ class Parseur:
                 return self.decl_variable()
             if mot == "fonction":
                 return self.decl_fonction()
+            if mot == "classe":
+                return self.decl_classe()
             if mot == "si":
                 return self.instr_si()
             if mot == "tantque":
@@ -165,8 +167,8 @@ class Parseur:
         expr = self.expression()
         if self.est_op(*AFFECTATIONS_COMPOSEES):
             op = self.avancer()
-            if not isinstance(expr, (Identifiant, Index)):
-                raise self.erreur("on ne peut affecter qu'à une variable ou à un élément de liste", op)
+            if not isinstance(expr, (Identifiant, Index, Membre)):
+                raise self.erreur("on ne peut affecter qu'à une variable, un élément de liste ou un champ", op)
             valeur = self.expression()
             self.fin_instruction()
             return Affectation(expr, valeur, op.valeur, ligne=j.ligne, colonne=j.colonne)
@@ -234,6 +236,40 @@ class Parseur:
         if multi:
             self.attendre_motcle("fin")
         return DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
+
+    def decl_classe(self) -> DeclClasse:
+        mot = self.avancer()
+        nom = self.attendre_ident("nom de classe attendu")
+        parent = None
+        if self.est_motcle("herite"):
+            self.avancer()
+            parent = self.attendre_ident("nom de la classe parente attendu").valeur
+        self.attendre_op(":", f"':' attendu après le nom de la classe '{nom.valeur}'")
+        champs: list[Champ] = []
+        methodes: list[DeclFonction] = []
+        self.sauter_nl()
+        while not self.est_motcle("fin"):
+            if self.est("fin_fichier"):
+                raise self.erreur(f"'fin' attendu pour fermer la classe '{nom.valeur}' (ligne {mot.ligne})")
+            if self.est_motcle("fonction"):
+                methodes.append(self.decl_fonction())
+            elif self.est("ident"):
+                cnom = self.avancer()
+                self.attendre_op(":", f"':' attendu après le champ '{cnom.valeur}' pour indiquer son type")
+                ctype = self.type_annot()
+                defaut = None
+                if self.est_op("="):
+                    self.avancer()
+                    defaut = self.expression()
+                self.fin_instruction()
+                champs.append(Champ(cnom.valeur, ctype, defaut, ligne=cnom.ligne, colonne=cnom.colonne))
+            else:
+                raise self.erreur(
+                    f"dans une classe, seuls des champs ('nom: type') et des méthodes ('fonction ...') sont "
+                    f"autorisés, mais {self._decrire(self.courant())} trouvé")
+            self.sauter_nl()
+        self.attendre_motcle("fin")
+        return DeclClasse(nom.valeur, parent, champs, methodes, ligne=mot.ligne, colonne=mot.colonne)
 
     def instr_si(self) -> Si:
         mot = self.avancer()
@@ -349,14 +385,23 @@ class Parseur:
                 j = self.avancer()
                 self.profondeur += 1
                 args: list[Expr] = []
+                nommes: list[tuple[str, Expr]] = []
                 if not self.est_op(")"):
-                    args.append(self.expression())
-                    while self.est_op(","):
-                        self.avancer()
-                        args.append(self.expression())
+                    while True:
+                        self._argument(args, nommes)
+                        if self.est_op(","):
+                            self.avancer()
+                            if self.est_op(")"):
+                                break
+                            continue
+                        break
                 self.profondeur -= 1
                 self.attendre_op(")", "')' attendu pour fermer l'appel")
-                e = Appel(e, args, ligne=j.ligne, colonne=j.colonne)
+                e = Appel(e, args, nommes, ligne=j.ligne, colonne=j.colonne)
+            elif self.est_op("."):
+                self.avancer()
+                nom = self.attendre_ident("nom de champ ou de méthode attendu après '.'")
+                e = Membre(e, nom.valeur, ligne=nom.ligne, colonne=nom.colonne)
             elif self.est_op("["):
                 j = self.avancer()
                 self.profondeur += 1
@@ -366,6 +411,18 @@ class Parseur:
                 e = Index(e, idx, ligne=j.ligne, colonne=j.colonne)
             else:
                 return e
+
+    def _argument(self, args: list[Expr], nommes: list[tuple[str, Expr]]) -> None:
+        j = self.courant()
+        suivant = self.jetons[self.pos + 1] if self.pos + 1 < len(self.jetons) else None
+        if j.genre == "ident" and suivant is not None and suivant.genre == "op" and suivant.valeur == "=":
+            self.avancer()
+            self.avancer()
+            nommes.append((j.valeur, self.expression()))
+            return
+        if nommes:
+            raise self.erreur("un argument positionnel ne peut pas suivre un argument nommé", j)
+        args.append(self.expression())
 
     def expr_primaire(self) -> Expr:
         j = self.courant()

@@ -31,6 +31,12 @@ def vers_texte(v: object) -> str:
         return repr(v)
     if isinstance(v, list):
         return "[" + ", ".join(_repr_elem(x) for x in v) + "]"
+    if isinstance(v, ObjetNck):
+        if "texte" in v.classe.methodes:
+            return str(v.classe.methodes["texte"](v))
+        return v.classe.nom + "(" + ", ".join(f"{k}={_repr_elem(x)}" for k, x in v.champs.items()) + ")"
+    if isinstance(v, ClasseNck):
+        return f"<classe {v.nom}>"
     if isinstance(v, FonctionNck):
         return f"<fonction {v.nom}>"
     if isinstance(v, Natif):
@@ -59,7 +65,39 @@ def nom_type_valeur(v: object) -> str:
         return "liste"
     if isinstance(v, (FonctionNck, Natif)):
         return "fonction"
+    if isinstance(v, ObjetNck):
+        return v.classe.nom
+    if isinstance(v, ClasseNck):
+        return "classe"
     return type(v).__name__
+
+
+class ClasseNck:
+    """Classe définie par l'utilisateur (remplie par l'interpréteur)."""
+
+    __slots__ = ("nom", "ancetres", "champs", "types_champs", "defauts", "methodes", "construire")
+
+    def __init__(self, nom: str, ancetres: tuple[str, ...]):
+        self.nom = nom
+        self.ancetres = ancetres
+        self.champs: list[str] = []
+        self.types_champs: dict[str, object] = {}
+        self.defauts: dict[str, Callable] = {}       # nom -> fonction () -> valeur
+        self.methodes: dict[str, Callable] = {}      # nom -> fonction (objet, *args)
+        self.construire: Callable = None             # type: ignore[assignment]
+
+    def __call__(self, *args, **kwargs):
+        return self.construire(*args, **kwargs)
+
+
+class ObjetNck:
+    """Instance d'une classe NCK."""
+
+    __slots__ = ("classe", "champs")
+
+    def __init__(self, classe: ClasseNck, champs: dict):
+        self.classe = classe
+        self.champs = champs
 
 
 class FonctionNck:
