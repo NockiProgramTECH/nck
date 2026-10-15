@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 0.12.0 — installation sans Python
+- Exécutable autonome `nck` (PyInstaller, `installateur/construire.py` + `nck.spec`) : Python embarqué, exemples, docs et extension VS Code inclus.
+- **Windows** : `NCK-Setup-<version>.exe` (Inno Setup, `installateur/windows/nck.iss`) — ajout au PATH, association des fichiers `.nck` avec icône, menu contextuel « Exécuter / Vérifier avec NCK », installation optionnelle de l'extension VS Code, désinstallateur propre.
+- **Linux / macOS** : `installateur/installer.sh` (téléchargement de la release, `~/.nck`, lien dans `~/.local/bin`, PATH, extension VS Code) ; `installateur/installer.ps1` pour Windows en ligne de commande.
+- GitHub Actions `release.yml` : à chaque tag `v*`, construction Linux x64/arm64, Windows x64, macOS x64/arm64 + Setup Windows, publication dans la Release.
+- CLI : bannière et REPL quand `nck` est lancé sans argument, nouvelle commande `nck info` (version, chemin, autonome ou non).
+- Extension VS Code 0.5.0 : utilise l'exécutable `nck` du PATH (réglage `nck.commande`), `python -m nck` en repli.
+- Documentation : `docs/INSTALLATION.md`.
+
 ## 0.11.1 — corrections de l'audit
 - **E1** Les `importer` sont traités avant tout : une classe importée peut servir de type (`p: Personne`) et de parent (`herite Personne`).
 - **E2** Les fermetures créées dans une boucle (`pour`, `tantque`) capturent la valeur de chaque itération.

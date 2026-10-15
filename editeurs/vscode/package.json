@@ -2,7 +2,7 @@
   "name": "nck-lang",
   "displayName": "NCK",
   "description": "Langage NCK : coloration, autocomplétion, survol, aide à la signature, erreurs en direct",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "nockiprogramtech",
   "license": "MIT",
   "engines": {
@@ -62,6 +62,11 @@
     "configuration": {
       "title": "NCK",
       "properties": {
+        "nck.commande": {
+          "type": "string",
+          "default": "",
+          "description": "Chemin de l'exécutable nck (ex : C:\\\\Program Files\\\\NCK\\\\nck.exe). Vide = détection automatique dans le PATH, sinon python -m nck."
+        },
         "nck.python": {
           "type": "string",
           "default": "",

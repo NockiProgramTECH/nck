@@ -21,9 +21,13 @@ de l'éditeur. Il n'y a **aucune dépendance npm** à installer.
 
 ## Installation
 
-### 1. Rendre le paquet `nck` accessible à Python
+> **Le plus simple** : l'installateur NCK (`NCK-Setup.exe`, `installer.sh`, `installer.ps1` — voir
+> [`INSTALLATION.md`](INSTALLATION.md)) installe la commande `nck` **et** l'extension VS Code d'un coup,
+> sans Python. Les étapes ci-dessous sont pour une installation manuelle depuis le dépôt.
 
-Au choix :
+### 1. Rendre la commande `nck` disponible
+
+L'extension cherche d'abord l'exécutable `nck` dans le PATH (installé par l'installateur), puis `python -m nck`. Au choix :
 
 ```bash
 cd nck            # le dépôt
@@ -52,7 +56,8 @@ Puis redémarrez VS Code (ou `Ctrl+Shift+P` → *Developer: Reload Window*) et o
 
 | Réglage | Rôle | Exemple |
 |---|---|---|
-| `nck.python` | commande Python à utiliser | `python3`, `python`, `C:\Python312\python.exe`, `.venv/bin/python` |
+| `nck.commande` | chemin de l'exécutable `nck` (vide = détection dans le PATH, sinon `python -m nck`) | `C:\Program Files\NCK\nck.exe` |
+| `nck.python` | commande Python à utiliser quand `nck` n'est pas dans le PATH | `python3`, `python`, `C:\Python312\python.exe`, `.venv/bin/python` |
 | `nck.dossierNck` | dossier du dépôt si `nck` n'est pas installé avec pip | `/home/moi/projets/nck` |
 
 ## En cas de problème
@@ -60,11 +65,12 @@ Puis redémarrez VS Code (ou `Ctrl+Shift+P` → *Developer: Reload Window*) et o
 - Ouvrez le panneau *Affichage → Sortie* et choisissez **NCK** : les messages du serveur y sont affichés.
 - Testez le serveur à la main : `python3 -m nck serveur` puis tapez
   `{"id":1,"methode":"analyser","fichier":"t.nck","texte":"ecrire(1 +)"}` et Entrée → une réponse JSON doit s'afficher.
-- « No module named nck » : installez le paquet (`pip install -e .`) ou remplissez `nck.dossierNck`.
+- « No module named nck » : installez NCK avec l'installateur, ou le paquet (`pip install -e .`), ou remplissez `nck.dossierNck`.
+- Pour savoir quelle commande l'extension a choisie : première ligne « Démarrage : … » du panneau Sortie NCK.
 
 - **L'icône `.nck` n'apparaît pas** : VS Code ≥ 1.76 est nécessaire, et le thème d'icônes actif doit laisser la place aux icônes de langage. Le thème par défaut (*Seti*) et *Minimal* le font ; certains thèmes tiers (ex. *Material Icon Theme*) imposent leurs propres icônes — passez par *Fichier → Préférences → Thème d'icônes de fichier* pour en choisir un autre. Après installation ou mise à jour de l'extension, rechargez la fenêtre (`Ctrl+Shift+P` → *Recharger la fenêtre*).
 
-Les fichiers d'icône sont dans `editeurs/vscode/icones/` : `nck-clair.svg` / `nck-sombre.svg` (VS Code), `nck.png` (extension), `nck.ico` (Windows, pour l'association de fichiers du futur installateur).
+Les fichiers d'icône sont dans `editeurs/vscode/icones/` : `nck-clair.svg` / `nck-sombre.svg` (VS Code), `nck.png` (extension), `nck.ico` (Windows, pour l'association de fichiers par `NCK-Setup.exe`).
 
 ## Pour les autres éditeurs
 

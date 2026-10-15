@@ -5,6 +5,7 @@
 const vscode = require("vscode");
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 
 let serveur = null;
 let tampon = "";
@@ -27,26 +28,47 @@ const GENRES = {
   Text: vscode.CompletionItemKind.Text,
 };
 
-function commandePython() {
+function trouverNck() {
+  // Cherche l'exécutable autonome « nck » (installé par NCK-Setup / installer.sh) dans le PATH.
+  const noms = process.platform === "win32" ? ["nck.exe", "nck.cmd", "nck.bat"] : ["nck"];
+  for (const dossier of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dossier) continue;
+    for (const nom of noms) {
+      const chemin = path.join(dossier, nom);
+      try { fs.accessSync(chemin, fs.constants.X_OK); return chemin; } catch (e) { /* suivant */ }
+    }
+  }
+  return null;
+}
+
+// Retourne { programme, args, dossierRepo, affichage } : la commande à lancer pour obtenir « nck <sous-commande> ».
+// Priorité : réglage nck.commande > exécutable nck du PATH > python -m nck.
+function commandeNck() {
   const config = vscode.workspace.getConfiguration("nck");
-  const python = config.get("python") || (process.platform === "win32" ? "python" : "python3");
   const dossierRepo = config.get("dossierNck") || "";
-  return { python, dossierRepo };
+  const commande = (config.get("commande") || "").trim();
+  if (commande) return { programme: commande, args: [], dossierRepo, affichage: commande };
+  if (!dossierRepo) {
+    const exe = trouverNck();
+    if (exe) return { programme: exe, args: [], dossierRepo, affichage: exe };
+  }
+  const python = config.get("python") || (process.platform === "win32" ? "python" : "python3");
+  return { programme: python, args: ["-m", "nck"], dossierRepo, affichage: `${python} -m nck` };
 }
 
 function demarrerServeur(contexte) {
   if (serveur) return;
-  const { python, dossierRepo } = commandePython();
+  const { programme, args, dossierRepo, affichage } = commandeNck();
   const options = { env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } };
   if (dossierRepo) {
     options.cwd = dossierRepo;
     options.env.PYTHONPATH = dossierRepo + (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : "");
   }
-  sortie.appendLine(`Démarrage : ${python} -m nck serveur` + (dossierRepo ? ` (dans ${dossierRepo})` : ""));
+  sortie.appendLine(`Démarrage : ${affichage} serveur` + (dossierRepo ? ` (dans ${dossierRepo})` : ""));
   try {
-    serveur = spawn(python, ["-m", "nck", "serveur"], options);
+    serveur = spawn(programme, [...args, "serveur"], options);
   } catch (e) {
-    sortie.appendLine("Impossible de lancer Python : " + e.message);
+    sortie.appendLine("Impossible de lancer NCK : " + e.message);
     serveur = null;
     return;
   }
@@ -186,11 +208,12 @@ function activate(contexte) {
     const editeur = vscode.window.activeTextEditor;
     if (!editeur || editeur.document.languageId !== "nck") return;
     editeur.document.save().then(() => {
-      const { python, dossierRepo } = commandePython();
+      const { affichage, dossierRepo } = commandeNck();
       const terminal = vscode.window.terminals.find((t) => t.name === "NCK") || vscode.window.createTerminal("NCK");
       terminal.show();
       const env = dossierRepo ? (process.platform === "win32" ? `$env:PYTHONPATH="${dossierRepo}"; ` : `PYTHONPATH="${dossierRepo}" `) : "";
-      terminal.sendText(`${env}${python} -m nck "${editeur.document.uri.fsPath}"`);
+      const prog = affichage.includes(" ") && !affichage.includes(" -m ") ? `& "${affichage}"` : affichage;
+      terminal.sendText(`${env}${prog} "${editeur.document.uri.fsPath}"`);
     });
   }));
 

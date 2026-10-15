@@ -931,3 +931,21 @@ def test_version_unique():
     import nck, tomllib
     data = tomllib.loads((RACINE / "pyproject.toml").read_text(encoding="utf-8"))
     assert "version" in data["project"].get("dynamic", []) and nck.__version__.count(".") == 2
+
+
+def test_cli_info_et_banniere():
+    import subprocess, sys, nck
+    r = subprocess.run([sys.executable, "-m", "nck", "info"], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0
+    assert f"NCK {nck.__version__}" in r.stdout and "Autonome" in r.stdout
+    from nck.cli import BANNIERE
+    assert "{version}" in BANNIERE
+
+
+def test_installateur_coherent():
+    # Les fichiers de l'installateur existent et le spec PyInstaller est du Python valide.
+    for f in ("installateur/nck.spec", "installateur/lanceur.py", "installateur/construire.py",
+              "installateur/windows/nck.iss", "installateur/installer.sh", "installateur/installer.ps1",
+              ".github/workflows/release.yml", "docs/INSTALLATION.md"):
+        assert (RACINE / f).exists(), f
+    compile((RACINE / "installateur/nck.spec").read_text(encoding="utf-8"), "nck.spec", "exec")

@@ -19,7 +19,7 @@ from .parseur import parser
 from .modules import Chargeur
 from .verificateur import Verificateur, verifier
 
-__version__ = "0.11.1"
+__version__ = "0.12.0"
 __all__ = [
     "__version__", "executer_source", "compiler_source", "lexer", "parser", "verifier", "Interpreteur",
     "ErreurNck", "ErreurLexicale", "ErreurSyntaxe", "ErreurType", "ErreurExecution",

@@ -33,15 +33,17 @@ ton nombre est petit ou égal à 20
 
 ## Installation
 
-Python 3.10 ou plus récent est nécessaire.
+**Sans rien d'autre à installer** (ni Python, ni dépendances) — voir [`docs/INSTALLATION.md`](docs/INSTALLATION.md) :
 
-```bash
-git clone https://github.com/NockiProgramTECH/nck.git
-cd nck
-pip install -e .          # installe la commande `nck`
-```
+| Système | Méthode |
+|---|---|
+| Windows | Téléchargez **`NCK-Setup-<version>.exe`** dans les [Releases](https://github.com/NockiProgramTECH/nck/releases) et suivez l'assistant (PATH, fichiers `.nck`, extension VS Code) |
+| Windows (terminal) | `irm https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.ps1 \| iex` |
+| Linux / macOS | `curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh \| sh` |
 
-Sans installation : `python -m nck programme.nck`.
+Puis, dans un nouveau terminal : `nck info`.
+
+Pour les développeurs (Python 3.10+) : `git clone … && cd nck && pip install -e .`
 
 ## Utilisation
 
@@ -123,13 +125,14 @@ L'extension [`editeurs/vscode/`](editeurs/vscode/) offre l'expérience « Pylanc
 erreurs de syntaxe et de type soulignées en tapant, autocomplétion (variables, fonctions, `objet.`, `module.`),
 infos au survol, aide à la signature, aller à la définition, exécution par `F5`.
 
+L'installateur (`NCK-Setup.exe`, `installer.sh`, `installer.ps1`) propose de l'installer pour vous. À la main :
+
 ```bash
-pip install -e .                                              # 1. le paquet nck (serveur d'analyse)
-cp -r editeurs/vscode ~/.vscode/extensions/nck-lang           # 2. l'extension (Linux/macOS)
-Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang"   #    (Windows)
+cp -r editeurs/vscode ~/.vscode/extensions/nck-lang           # Linux/macOS
+Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang"   # Windows
 ```
 
-puis redémarrez VS Code. Guide complet : [`docs/EDITEUR.md`](docs/EDITEUR.md).
+puis redémarrez VS Code. L'extension utilise l'exécutable `nck` du PATH (ou `python -m nck` à défaut). Guide complet : [`docs/EDITEUR.md`](docs/EDITEUR.md).
 
 ## Structure du projet
 
@@ -173,5 +176,6 @@ Historique détaillé : [CHANGELOG.md](CHANGELOG.md). Licence MIT.
 - [x] v0.9 — POO complète (`parent`, `statique`, `constante` de classe, privé `_x`, `abstraite`, `est_un`, surcharge d'opérateurs), décorateurs `@deco`, `...args`
 - [x] v0.10 — fonctions anonymes `fonction(x): x * 2`, `appliquer`/`filtrer`/`reduire`…, types optionnels `texte?` + `??`, plages `a..b`
 - [x] v0.11 — notation méthode `liste.ajouter(x)`, énumérations, `si … alors … sinon` en expression, affectation multiple, textes `"""…"""`
-- [ ] v0.12 — installateur (`NCK-Setup.exe`, Linux, macOS), v0.13 — paquets `nck installer`, v0.14 — interface graphique
+- [x] v0.12 — installateur sans Python : `NCK-Setup.exe` (Windows), `installer.sh` (Linux/macOS), releases automatiques, `nck info`
+- [ ] v0.13 — paquets `nck installer`, v0.14 — interface graphique
 - [ ] réécriture du moteur en C

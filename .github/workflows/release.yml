@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construire:
+    name: ${{ matrix.nom }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04,  nom: linux-x64 }
+          - { os: ubuntu-22.04-arm, nom: linux-arm64 }
+          - { os: windows-latest, nom: windows-x64 }
+          - { os: macos-13,      nom: macos-x64 }
+          - { os: macos-latest,  nom: macos-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dépendances
+        run: pip install -e . pyinstaller
+      - name: Tests
+        run: pip install pytest && pytest -q
+      - name: Construire l'exécutable
+        run: python installateur/construire.py
+      - name: Vérifier l'exécutable
+        shell: bash
+        run: |
+          ./dist/nck/nck info
+          ./dist/nck/nck verifier exemples/bonjour.nck
+          ./dist/nck/nck exemples/bonjour.nck
+      - name: Installateur Windows (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = python -c "import nck; print(nck.__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DVersion=$v installateur\windows\nck.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nck-${{ matrix.nom }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/NCK-Setup-*.exe
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          merge-multiple: true
+      - name: Publier la release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artefacts/*
+          generate_release_notes: true

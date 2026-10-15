@@ -83,6 +83,22 @@ def commande_verifier(chemin: str) -> int:
     return 0
 
 
+BANNIERE = """\
+  _   _  ____ _  __
+ | \\ | |/ ___| |/ /   NCK {version} — langage de programmation simple, typé et en français
+ |  \\| | |   | ' /    {ou}
+ | |\\  | |___| . \\    nck fichier.nck        exécuter un programme
+ |_| \\_|\\____|_|\\_\\   nck verifier f.nck     vérifier sans exécuter
+                      nck repl               mode interactif    |  nck --help : toutes les commandes
+"""
+
+
+def banniere() -> str:
+    import shutil
+    exe = shutil.which("nck") or sys.argv[0]
+    return BANNIERE.format(version=__version__, ou=f"installé : {exe}")
+
+
 def repl() -> int:
     print(f"NCK {__version__} — mode interactif. Tapez 'quitter()' ou Ctrl-D pour sortir.")
     verif = Verificateur("<repl>", mode_repl=True)
@@ -151,10 +167,14 @@ def main(argv: list[str] | None = None) -> int:
     p_verif.add_argument("fichier")
     sous.add_parser("repl", help="mode interactif")
     sous.add_parser("serveur", help="serveur d'analyse pour les éditeurs (autocomplétion, survol, erreurs)")
+    sous.add_parser("info", help="affiche la version et l'emplacement de NCK")
 
     args = argv if argv is not None else sys.argv[1:]
+    if not args:
+        print(banniere())
+        return repl()
     # Raccourci : `nck fichier.nck`
-    if args and args[0] not in ("executer", "verifier", "repl", "serveur", "-h", "--help", "--version"):
+    if args and args[0] not in ("executer", "verifier", "repl", "serveur", "info", "-h", "--help", "--version"):
         args = ["executer", *args]
     ns = ap.parse_args(args)
 
@@ -167,6 +187,12 @@ def main(argv: list[str] | None = None) -> int:
     if ns.commande == "serveur":
         from .serveur import main as serveur_main
         return serveur_main()
+    if ns.commande == "info":
+        print(banniere())
+        print(f"Python : {sys.version.split()[0]}  ({sys.executable})")
+        print(f"Paquet : {os.path.dirname(os.path.abspath(__file__))}")
+        print(f"Autonome (sans Python installé) : {'oui' if getattr(sys, 'frozen', False) else 'non'}")
+        return 0
     return repl()
 
 
