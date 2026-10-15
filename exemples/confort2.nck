@@ -1,0 +1,42 @@
+// Confort 2 : énumérations, notation méthode, si…alors…sinon, affectation multiple, textes multi-lignes
+enumeration Couleur: ROUGE, VERT, BLEU fin
+
+fonction decrire(c: Couleur) -> texte:
+    selon c:
+        cas Couleur.ROUGE: retourner "chaud"
+        cas Couleur.VERT, Couleur.BLEU: retourner "froid"
+    fin
+fin
+variable c = Couleur.VERT
+ecrire(c, c.nom, c.indice, decrire(c), Couleur.valeurs, c == Couleur.VERT, Couleur.ROUGE < Couleur.BLEU)
+variable prix: dico<Couleur, entier> = {Couleur.ROUGE: 10}
+ecrire(prix[Couleur.ROUGE])
+
+variable nombres = [3, 1, 2]
+nombres.ajouter(5)
+ecrire(nombres.longueur(), nombres.trier(), nombres.filtrer(fonction(x): x > 1).appliquer(fonction(x): x * 10))
+ecrire("bonjour".majuscule(), " a-b ".nettoyer().decouper("-"), [1, 2].joindre(", "))
+variable d = {"a": 1}
+ecrire(d.cles(), d.obtenir("b") ?? 0, 3.7.arrondir(), (-4).absolu())
+
+variable a, b = 1, "deux"
+a, b = 2, "trois"
+ecrire(a, b)
+variable x, y = 1, 2
+x, y = y, x
+ecrire(x, y)
+fonction minmax(l: liste<entier>) -> liste<entier>:
+    retourner l.minimum(), l.maximum()
+fin
+variable mini, maxi = minmax([4, 9, 2])
+ecrire(mini + maxi)
+
+variable age = 20
+variable statut = si age >= 18 alors "majeur" sinon "mineur"
+ecrire(statut, si age > 50 alors 1 sinon 0)
+
+variable poeme = """
+    Bonjour,
+      le monde !
+    Fin."""
+ecrire(poeme)

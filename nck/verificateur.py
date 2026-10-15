@@ -4,21 +4,23 @@ import os
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, DeclMultiple, AffectationMultiple, DeclEnum, Conditionnelle, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
 from .modules import Chargeur, Module
 from .natifs import NATIFS
+from .documentation import METHODES_PAR_TYPE
 from .types_nck import (
     BOOLEEN, DICO_VIDE, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_CLES, TYPES_SIMPLES,
-    Type, TypeClasse, TypeFonction, TypeModule, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
+    Type, TypeClasse, TypeEnum, TypeFonction, TypeModule, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
     est_numerique, est_optionnel, liste_de, optionnel_de, sans_nul, unifier, valeur_de,
 )
 
 TYPE_META_CLASSE = Type("classe")   # type du symbole qui désigne une classe (ex : `Personne`)
 TYPE_ERREUR = TypeClasse("Erreur")  # classe intégrée
-INFERER = Type("<à déduire>")        # type de retour en cours de déduction (fonction anonyme sans annotation)
+INFERER = Type("<à déduire>")
+TYPE_META_ENUM = Type("enumeration")   # type du symbole qui désigne une énumération (ex : `Couleur`)        # type de retour en cours de déduction (fonction anonyme sans annotation)
 
 
 class InfoClasse:
@@ -100,6 +102,9 @@ class Verificateur:
         self.profondeur_boucle = 0
         self.chargeur = chargeur if chargeur is not None else Chargeur()
         self.classes: dict[str, InfoClasse] = classes if classes is not None else {}
+        if not hasattr(self.chargeur, "enums"):
+            self.chargeur.enums = {}  # type: ignore[attr-defined]
+        self.enums: dict[str, TypeEnum] = self.chargeur.enums  # type: ignore[attr-defined]  # partagées entre modules
         # Pour l'éditeur : liste de dicts {ligne, colonne, longueur, nom, symbole, genre}
         self.enregistrements: list[dict] = []
         self.pile_fonctions: list[tuple[int, int]] = []     # (ligne début, ligne fin) des fonctions englobantes
@@ -144,7 +149,7 @@ class Verificateur:
             if len(annot.params) != 2:
                 raise self.erreur("'dico' prend deux paramètres, ex : dico<texte, entier>", annot)
             k = self.resoudre_type(annot.params[0])
-            if k not in TYPES_CLES and k != QUELCONQUE:
+            if k not in TYPES_CLES and k != QUELCONQUE and not isinstance(k, TypeEnum):
                 raise self.erreur(f"une clé de dictionnaire doit être un texte, un entier ou un booleen, pas un {k}",
                                   annot.params[0])
             return dico_de(k, self.resoudre_type(annot.params[1]))
@@ -152,6 +157,8 @@ class Verificateur:
             if annot.params:
                 raise self.erreur(f"la classe '{nom}' ne prend pas de paramètre de type", annot)
             return self.classes[nom].type
+        if nom in self.enums:
+            return self.enums[nom]
         if nom == "fonction":
             if not annot.params:
                 raise self.erreur("un type fonction s'écrit fonction<param1, param2, retour>", annot)
@@ -207,6 +214,16 @@ class Verificateur:
 
     def pre_declarer_fonctions(self, instructions: list[Instr]) -> None:
         """Les fonctions et classes sont visibles dans tout leur bloc, même avant leur définition."""
+        # 0. énumérations
+        for instr in instructions:
+            if isinstance(instr, DeclEnum):
+                if instr.nom in self.enums or instr.nom in self.classes:
+                    raise self.erreur(f"'{instr.nom}' est déjà défini (énumération ou classe)", instr)
+                t = TypeEnum(instr.nom, (), tuple(instr.valeurs))
+                self.enums[instr.nom] = t
+                self.declarer(instr.nom, TYPE_META_ENUM, instr, constante=True, genre="enumeration",
+                              description=f"enumeration {instr.nom}: {', '.join(instr.valeurs)}")
+                instr.type_enum = t  # type: ignore[attr-defined]
         # 1. noms des classes (une classe parente doit être déclarée avant ses enfants)
         for instr in instructions:
             if isinstance(instr, DeclClasse):
@@ -432,6 +449,63 @@ class Verificateur:
     def instruction(self, instr: Instr) -> bool:
         m = getattr(self, "i_" + type(instr).__name__)
         return bool(m(instr))
+
+    def i_DeclEnum(self, e: DeclEnum) -> bool:
+        return False
+
+    def _types_multiples(self, valeurs: list[Expr], n: int, noeud) -> list[Type]:
+        """Types des n valeurs d'une affectation multiple (n expressions, ou une liste à déstructurer)."""
+        if len(valeurs) == n:
+            types = [self.expression(v) for v in valeurs]
+            for v, t in zip(valeurs, types):
+                if t == RIEN:
+                    raise self.erreur("cette valeur est le résultat d'une fonction qui ne retourne rien", v)
+            return types
+        t = self.expression(valeurs[0])
+        if t == QUELCONQUE:
+            return [QUELCONQUE] * n
+        if not est_liste(t):
+            raise self.erreur(f"pour déstructurer, la valeur doit être une liste (de {n} éléments), mais c'est un {t}", valeurs[0])
+        elem = element_de(t)
+        return [elem if elem.nom != "?" else QUELCONQUE] * n
+
+    def i_DeclMultiple(self, d: DeclMultiple) -> bool:
+        types = self._types_multiples(d.valeurs, len(d.noms), d)
+        d.types = types  # type: ignore[attr-defined]
+        for nom, t, pos in zip(d.noms, types, d.positions):
+            if t == NUL:
+                raise self.erreur(f"impossible de déduire le type de '{nom}' depuis 'nul' : utilisez une déclaration simple avec un type", d)
+            if t == LISTE_VIDE:
+                t = liste_de(QUELCONQUE)
+            elif t == DICO_VIDE:
+                t = dico_de(QUELCONQUE, QUELCONQUE)
+            faux = Identifiant(nom, ligne=pos[0], colonne=pos[1])
+            faux.position_nom = pos  # type: ignore[attr-defined]
+            self.declarer(nom, t, faux, d.constante)
+        return False
+
+    def i_AffectationMultiple(self, a: AffectationMultiple) -> bool:
+        cibles_types = []
+        for c in a.cibles:
+            if isinstance(c, Identifiant):
+                sym = self.portee.chercher(c.nom)
+                if sym is None:
+                    raise self.erreur(f"variable '{c.nom}' inconnue", c)
+                if sym.constante:
+                    raise self.erreur(f"'{c.nom}' est une constante : impossible de la modifier", c)
+                self.enregistrer(c, c.nom, sym)
+                sym.initialisee = True
+                c.type = sym.type_declare or sym.type  # type: ignore[attr-defined]
+                cibles_types.append(c.type)  # type: ignore[attr-defined]
+            else:
+                cibles_types.append(self.expression(c))
+        types = self._types_multiples(a.valeurs, len(a.cibles), a)
+        for c, tc, tv in zip(a.cibles, cibles_types, types):
+            if not compatible(tv, tc):
+                nom = c.nom if isinstance(c, (Identifiant, Membre)) else "cette cible"
+                raise self.erreur(f"impossible d'affecter un {tv} à '{nom}' de type {tc}{self.aide_optionnel(tv)}", a)
+        a.types = cibles_types  # type: ignore[attr-defined]
+        return False
 
     def i_DeclVariable(self, d: DeclVariable) -> bool:
         t_annot = self.resoudre_type(d.type_annot) if d.type_annot else None
@@ -689,13 +763,24 @@ class Verificateur:
         if t == RIEN:
             raise self.erreur("'selon' ne peut pas porter sur une valeur de type 'rien'", s.sujet)
         termine = True
+        couverts: set[str] = set()
         for c in s.cas:
             for v in c.valeurs:
                 tv = self.expression(v)
                 if t != QUELCONQUE and tv != QUELCONQUE and not compatible(tv, t) and not compatible(t, tv):
                     raise self.erreur(f"ce 'cas' ({tv}) ne peut jamais correspondre à un {t}", v)
+                if isinstance(t, TypeEnum) and isinstance(v, Membre):
+                    if v.nom in couverts:
+                        raise self.erreur(f"le cas '{t.nom}.{v.nom}' est traité deux fois", v)
+                    couverts.add(v.nom)
             termine = self.bloc(c.corps) and termine
         if s.sinon is None:
+            if isinstance(t, TypeEnum):
+                manquants = [v for v in t.valeurs if v not in couverts]
+                if manquants:
+                    raise self.erreur(f"ce 'selon' sur {t.nom} n'est pas complet : il manque {', '.join(t.nom + '.' + m for m in manquants)} "
+                                      f"(ajoutez les cas manquants ou un 'sinon')", s)
+                return termine
             return False
         return self.bloc(s.sinon) and termine
 
@@ -744,6 +829,8 @@ class Verificateur:
         """Comme `expression`, mais transmet le type attendu (typage contextuel des fonctions anonymes)."""
         if isinstance(e, FonctionAnonyme) and isinstance(attendu, TypeFonction):
             e.attendu = attendu  # type: ignore[attr-defined]
+        elif isinstance(e, Conditionnelle) and attendu is not None:
+            e.attendu = attendu  # type: ignore[attr-defined]
         return self.expression(e)
 
     @staticmethod
@@ -751,6 +838,34 @@ class Verificateur:
         if est_optionnel(t):
             return f" (la valeur peut être nul : testez-la avec 'si x != nul' ou donnez une valeur de repli avec 'x ?? valeur')"
         return ""
+
+    def e_Conditionnelle(self, c: Conditionnelle) -> Type:
+        self.condition(c.condition, "si")
+        si_vrai, si_faux = self.affinements(c.condition)
+        attendu = getattr(c, "attendu", None)
+        self.ouvrir()
+        self.affiner(si_vrai)
+        t1 = self.typer(c.alors, attendu)
+        self.fermer()
+        self.ouvrir()
+        self.affiner(si_faux)
+        t2 = self.typer(c.sinon, attendu)
+        self.fermer()
+        if t1 == RIEN or t2 == RIEN:
+            raise self.erreur("les deux branches de 'si … alors … sinon …' doivent produire une valeur", c)
+        if t1 == NUL and t2 != NUL:
+            return optionnel_de(t2)
+        if t2 == NUL and t1 != NUL:
+            return optionnel_de(t1)
+        if t1 == t2:
+            return t1
+        if compatible(t1, t2) and not compatible(t2, t1):
+            return t2
+        if compatible(t2, t1) and not compatible(t1, t2):
+            return t1
+        if compatible(t1, t2):
+            return unifier(t1, t2)
+        raise self.erreur(f"les deux branches de 'si … alors … sinon …' ont des types incompatibles : {t1} et {t2}", c)
 
     def e_FonctionAnonyme(self, fa: FonctionAnonyme) -> Type:
         attendu: TypeFonction | None = getattr(fa, "attendu", None)
@@ -860,7 +975,7 @@ class Verificateur:
         tk = tv = None
         for cle, val in d.entrees:
             k = self.expression(cle)
-            if k not in TYPES_CLES and k != QUELCONQUE:
+            if k not in TYPES_CLES and k != QUELCONQUE and not isinstance(k, TypeEnum):
                 raise self.erreur(f"une clé de dictionnaire doit être un texte, un entier ou un booleen, pas un {k}", cle)
             v = self.expression(val)
             if v == RIEN or v == NUL:
@@ -950,6 +1065,8 @@ class Verificateur:
             if td != ENTIER and td != QUELCONQUE:
                 raise self.erreur(f"'..' attend deux entiers, mais la borne de droite est un {td}", noeud)
             return liste_de(ENTIER)
+        if isinstance(tg, TypeEnum) and isinstance(td, TypeEnum) and tg.nom == td.nom and op in ("<", ">", "<=", ">="):
+            return BOOLEEN
         if op not in ("==", "!=") and (est_optionnel(tg) or est_optionnel(td)):
             t_opt = tg if est_optionnel(tg) else td
             raise self.erreur(f"'{op}' impossible sur un {t_opt}{self.aide_optionnel(t_opt)}", noeud)
@@ -1049,6 +1166,21 @@ class Verificateur:
                 raise self.erreur(f"le module '{t.nom}' ne définit pas '{m.nom}' (disponibles : {dispo})", m)
             self.enregistrer(m, m.nom, sym)
             return sym.type
+        if t == TYPE_META_ENUM and isinstance(m.objet, (Identifiant, Membre)) and m.objet.nom in self.enums:
+            te = self.enums[m.objet.nom]
+            if m.nom in te.valeurs:
+                sym = Symbole(te, constante=True, genre="constante", description=f"{te.nom}.{m.nom} (valeur {te.valeurs.index(m.nom)} de l'énumération)")
+                self.enregistrer(m, m.nom, sym)
+                return te
+            if m.nom == "valeurs":
+                return liste_de(te)
+            raise self.erreur(f"l'énumération '{te.nom}' n'a pas de valeur '{m.nom}' (valeurs : {', '.join(te.valeurs)})", m)
+        if isinstance(t, TypeEnum):
+            if m.nom == "nom":
+                return TEXTE
+            if m.nom == "indice":
+                return ENTIER
+            raise self.erreur(f"une valeur de '{t.nom}' n'a que '.nom' (texte) et '.indice' (entier), pas '.{m.nom}'", m)
         if t == TYPE_META_CLASSE and isinstance(m.objet, Identifiant) and m.objet.nom in self.classes:
             info = self.classes[m.objet.nom]
             if m.nom in info.statiques or m.nom in info.constantes:
@@ -1064,6 +1196,8 @@ class Verificateur:
             dispo = ", ".join(sorted(list(info.statiques) + list(info.constantes))) or "aucun"
             raise self.erreur(f"la classe '{info.nom}' n'a pas de méthode statique ni de constante '{m.nom}' (disponibles : {dispo})", m)
         if not isinstance(t, TypeClasse):
+            if m.nom in METHODES_PAR_TYPE.get(t.nom, ()):
+                raise self.erreur(f"'{m.nom}' est une méthode : il faut l'appeler avec des parenthèses, ex : .{m.nom}()", m)
             raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}'){self.aide_optionnel(t)}", m)
         info = self.classes[t.nom]
         if m.nom.startswith("_") and (m.nom in info.champs or m.nom in info.methodes):
@@ -1082,6 +1216,36 @@ class Verificateur:
         proches = [n for n in list(info.champs) + list(info.methodes) if n.lower() == m.nom.lower()]
         aide = f" (vouliez-vous dire '{proches[0]}' ?)" if proches else ""
         raise self.erreur(f"la classe '{t.nom}' n'a pas de champ ni de méthode '{m.nom}'{aide}", m)
+
+    def e_MethodeNative(self, a: Appel, t_obj: Type) -> Type:
+        """`liste.ajouter(x)` ≡ `ajouter(liste, x)` : notation méthode pour les fonctions natives."""
+        nom = a.cible.nom
+        dispo = METHODES_PAR_TYPE[t_obj.nom]
+        if nom not in dispo or nom not in NATIFS:
+            proches = [n for n in dispo if n.lower().startswith(nom.lower()[:3])]
+            aide = f" (vouliez-vous dire '{proches[0]}' ?)" if proches else f" (disponibles : {', '.join(dispo)})"
+            raise self.erreur(f"un {t_obj} n'a pas de méthode '{nom}'{aide}", a.cible)
+        if a.nommes:
+            raise self.erreur("les arguments nommés ne sont pas possibles ici", a.nommes[0][1])
+        if any(isinstance(arg, Etalement) for arg in a.arguments):
+            raise self.erreur(f"'...' n'est pas possible avec la méthode native '{nom}'", a)
+        natif = NATIFS[nom]
+        types = [t_obj]
+        for i, arg in enumerate(a.arguments, 1):
+            attendu = natif.attendu(i, types) if natif.attendu is not None else None
+            types.append(self.typer(arg, attendu))
+        for arg, t in zip(a.arguments, types[1:]):
+            if t == RIEN:
+                raise self.erreur("cet argument est le résultat d'une fonction qui ne retourne rien", arg)
+        sym = self.portee.chercher(nom)
+        if sym is None or sym.type != Type("natif"):
+            sym = Symbole(Type("natif"), constante=True, genre="natif", description=nom)
+        self.enregistrer(a.cible, nom, sym)
+        a.natif = natif  # type: ignore[attr-defined]
+        a.methode_native = True  # type: ignore[attr-defined]
+        a.verifs_runtime = ()  # type: ignore[attr-defined]
+        a.cible.type = Type("natif")  # type: ignore[attr-defined]
+        return natif.verifier(types, lambda msg: self.erreur(msg, a))
 
     def e_Construction(self, a: Appel, info: InfoClasse) -> Type:
         a.cible.type = TYPE_META_CLASSE  # type: ignore[attr-defined]
@@ -1131,6 +1295,9 @@ class Verificateur:
                 sym = self._module_de(t_obj).exports.get(a.cible.nom)
                 if sym is not None and sym.type == TYPE_META_CLASSE and a.cible.nom in self.classes:
                     return self.e_Construction(a, self.classes[a.cible.nom])
+            base = t_obj.nom if not isinstance(t_obj, (TypeClasse, TypeModule, TypeFonction, TypeEnum)) else None
+            if base in METHODES_PAR_TYPE:
+                return self.e_MethodeNative(a, t_obj)
         if a.nommes:
             raise self.erreur("les arguments nommés ('nom = valeur') ne sont possibles que pour créer un objet "
                               "(ex : Personne(nom = \"Awa\"))", a.nommes[0][1])

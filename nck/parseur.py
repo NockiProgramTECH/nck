@@ -4,7 +4,7 @@ from .arbre import (
     Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Cas, Champ, Continuer, DeclClasse, DeclFonction,
     DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral,
     Logique, Membre, Parametre, Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
-    Etalement, FonctionAnonyme,
+    Etalement, FonctionAnonyme, DeclMultiple, AffectationMultiple, DeclEnum, Conditionnelle,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -148,6 +148,10 @@ class Parseur:
                 return self.decl_fonction()
             if mot == "classe":
                 return self.decl_classe()
+            if mot == "enumeration":
+                return self.decl_enum()
+            if mot == "alors":
+                raise self.erreur("'alors' inattendu : il s'utilise dans une expression 'si condition alors a sinon b'")
             if mot == "si":
                 return self.instr_si()
             if mot == "essayer":
@@ -180,6 +184,13 @@ class Parseur:
                 if not (nxt.genre in ("nl", "fin_fichier") or (nxt.genre == "op" and nxt.valeur == ";")
                         or (nxt.genre == "motcle" and nxt.valeur in ("fin", "sinon", "attraper", "enfin", "cas"))):
                     valeur = self.expression()
+                    if self.est_op(","):          # retourner a, b  →  liste [a, b]
+                        valeurs = [valeur]
+                        while self.est_op(","):
+                            self.avancer()
+                            valeurs.append(self.expression())
+                        valeur = ListeLit(valeurs, ligne=valeur.ligne, colonne=valeur.colonne)
+                        valeur.multiple = True  # type: ignore[attr-defined]
                 self.fin_instruction()
                 return Retourner(valeur, ligne=j.ligne, colonne=j.colonne)
             if mot == "arreter":
@@ -196,6 +207,23 @@ class Parseur:
                 raise self.erreur("'dans' inattendu")
 
         expr = self.expression()
+        if self.est_op(",") and isinstance(expr, (Identifiant, Index, Membre)):
+            cibles = [expr]
+            while self.est_op(","):
+                self.avancer()
+                c = self.expression()
+                if not isinstance(c, (Identifiant, Index, Membre)):
+                    raise self.erreur("on ne peut affecter qu'à des variables, éléments de liste ou champs", c)
+                cibles.append(c)
+            self.attendre_op("=", "'=' attendu après la liste de cibles (ex : a, b = b, a)")
+            valeurs = [self.expression()]
+            while self.est_op(","):
+                self.avancer()
+                valeurs.append(self.expression())
+            self.fin_instruction()
+            if len(valeurs) not in (1, len(cibles)):
+                raise self.erreur(f"{len(cibles)} cibles mais {len(valeurs)} valeurs", j)
+            return AffectationMultiple(cibles, valeurs, ligne=j.ligne, colonne=j.colonne)
         if self.est_op(*AFFECTATIONS_COMPOSEES):
             op = self.avancer()
             if not isinstance(expr, (Identifiant, Index, Membre)):
@@ -210,6 +238,24 @@ class Parseur:
         mot = self.avancer()
         constante = mot.valeur == "constante"
         nom = self.attendre_ident("nom de variable attendu")
+        if self.est_op(","):
+            noms, positions = [nom.valeur], [(nom.ligne, nom.colonne)]
+            while self.est_op(","):
+                self.avancer()
+                n2 = self.attendre_ident("nom de variable attendu après ','")
+                noms.append(n2.valeur)
+                positions.append((n2.ligne, n2.colonne))
+            if self.est_op(":"):
+                raise self.erreur("pas d'annotation de type dans une déclaration multiple : les types sont déduits des valeurs")
+            self.attendre_op("=", f"'=' attendu : une déclaration multiple doit recevoir des valeurs (ex : variable {', '.join(noms)} = …)")
+            valeurs = [self.expression()]
+            while self.est_op(","):
+                self.avancer()
+                valeurs.append(self.expression())
+            self.fin_instruction()
+            if len(valeurs) not in (1, len(noms)):
+                raise self.erreur(f"{len(noms)} variables mais {len(valeurs)} valeurs", mot)
+            return DeclMultiple(noms, valeurs, constante, positions, ligne=mot.ligne, colonne=mot.colonne)
         type_annot = None
         if self.est_op(":"):
             self.avancer()
@@ -331,6 +377,33 @@ class Parseur:
         self.profondeur -= 1
         self.attendre_op(")")
         return parametres
+
+    def decl_enum(self) -> DeclEnum:
+        mot = self.avancer()
+        nom = self.attendre_ident("nom de l'énumération attendu")
+        self.attendre_op(":", f"':' attendu après le nom de l'énumération '{nom.valeur}'")
+        valeurs: list[str] = []
+        positions: list[tuple[int, int]] = []
+        while True:
+            self.sauter_nl()
+            if self.est_motcle("fin"):
+                self.avancer()
+                break
+            if self.est("fin_fichier"):
+                raise self.erreur(f"'fin' attendu pour fermer l'énumération '{nom.valeur}' (ligne {mot.ligne})")
+            v = self.attendre_ident("nom de valeur attendu dans l'énumération (ex : ROUGE)")
+            if v.valeur in valeurs:
+                raise self.erreur(f"la valeur '{v.valeur}' est en double dans l'énumération '{nom.valeur}'", v)
+            valeurs.append(v.valeur)
+            positions.append((v.ligne, v.colonne))
+            if self.est_op(","):
+                self.avancer()
+        if not valeurs:
+            raise self.erreur(f"l'énumération '{nom.valeur}' doit contenir au moins une valeur", nom)
+        self.fin_instruction()
+        e = DeclEnum(nom.valeur, valeurs, positions, ligne=mot.ligne, colonne=mot.colonne)
+        e.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+        return e
 
     def decl_classe(self) -> DeclClasse:
         mot = self.avancer()
@@ -538,6 +611,18 @@ class Parseur:
     # ----- expressions (par précédence croissante) -----
 
     def expression(self) -> Expr:
+        if self.est_motcle("si"):
+            j = self.avancer()
+            cond = self.expr_sinon_nul()
+            if not self.est_motcle("alors"):
+                raise self.erreur("'alors' attendu : un 'si' dans une expression s'écrit 'si condition alors valeur sinon valeur'")
+            self.avancer()
+            alors = self.expression()
+            if not self.est_motcle("sinon"):
+                raise self.erreur("'sinon' attendu : l'expression 'si … alors …' doit toujours avoir un 'sinon'")
+            self.avancer()
+            sinon = self.expression()
+            return Conditionnelle(cond, alors, sinon, ligne=j.ligne, colonne=j.colonne)
         return self.expr_sinon_nul()
 
     def expr_sinon_nul(self) -> Expr:

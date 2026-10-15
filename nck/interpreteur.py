@@ -9,12 +9,12 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, DeclMultiple, AffectationMultiple, DeclEnum, Conditionnelle, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .modules import Chargeur
-from .natifs import NATIFS, OPERATEURS_CLASSE, ClasseNck, FonctionNck, ModuleNck, ObjetNck, ParentNck, nom_type_valeur, vers_texte
+from .natifs import NATIFS, OPERATEURS_CLASSE, ClasseNck, EnumNck, FonctionNck, ModuleNck, ObjetNck, ParentNck, ValeurEnum, nom_type_valeur, vers_texte
 from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, TypeClasse, est_dico, est_liste, valeur_compatible
 
 
@@ -440,6 +440,101 @@ class Interpreteur:
             env.vars[nom] = classe
         return decl
 
+    def i_DeclEnum(self, e: DeclEnum) -> Fn:
+        nom, valeurs = e.nom, list(e.valeurs)
+
+        def decl(env):
+            env.vars[nom] = EnumNck(nom, valeurs)
+        return decl
+
+    def _valeurs_multiples(self, valeurs, n: int, noeud):
+        erreur = self.erreur
+        if len(valeurs) == n:
+            fns = [self.expression(v) for v in valeurs]
+            return lambda env: [f(env) for f in fns]
+        f0 = self.expression(valeurs[0])
+
+        def depuis_liste(env):
+            v = f0(env)
+            if not isinstance(v, list):
+                raise erreur(f"pour déstructurer, la valeur doit être une liste, mais c'est un {nom_type_valeur(v)}", noeud)
+            if len(v) != n:
+                raise erreur(f"déstructuration impossible : {n} variable(s) mais la liste contient {len(v)} élément(s)", noeud)
+            return v
+        return depuis_liste
+
+    def i_DeclMultiple(self, d: DeclMultiple) -> Fn:
+        noms = list(d.noms)
+        types = d.types  # type: ignore[attr-defined]
+        valeurs = self._valeurs_multiples(d.valeurs, len(noms), d)
+        erreur = self.erreur
+
+        def decl(env):
+            vs = valeurs(env)
+            for nom, t, v in zip(noms, types, vs):
+                if t != QUELCONQUE and not valeur_compatible(v, t):
+                    raise erreur(f"'{nom}' est de type {t}, mais reçoit un {nom_type_valeur(v)} ({vers_texte(v)})", d)
+                env.vars[nom] = v
+        return decl
+
+    def i_AffectationMultiple(self, a: AffectationMultiple) -> Fn:
+        valeurs = self._valeurs_multiples(a.valeurs, len(a.cibles), a)
+        types = a.types  # type: ignore[attr-defined]
+        affecteurs = [self._affecteur(c) for c in a.cibles]
+        erreur = self.erreur
+
+        def affecter(env):
+            vs = valeurs(env)
+            for aff, t, v, c in zip(affecteurs, types, vs, a.cibles):
+                if t != QUELCONQUE and not valeur_compatible(v, t):
+                    raise erreur(f"impossible d'affecter un {nom_type_valeur(v)} ({vers_texte(v)}) à une cible de type {t}", a)
+                aff(env, v)
+        return affecter
+
+    def _affecteur(self, cible):
+        """Retourne fn(env, valeur) qui range la valeur dans la cible (variable, champ ou élément)."""
+        erreur = self.erreur
+        if isinstance(cible, Identifiant):
+            nom = cible.nom
+
+            def aff_var(env, v):
+                e = env
+                while e is not None:
+                    if nom in e.vars:
+                        e.vars[nom] = v
+                        return
+                    e = e.parent
+                raise KeyError(nom)
+            return aff_var
+        if isinstance(cible, Membre):
+            objet, champ = self.expression(cible.objet), cible.nom
+
+            def aff_champ(env, v):
+                o = objet(env)
+                if not isinstance(o, ObjetNck) or champ not in o.champs:
+                    raise erreur(f"un {nom_type_valeur(o)} n'a pas de champ '{champ}'", cible)
+                o.champs[champ] = v
+            return aff_champ
+        conteneur, index = self.expression(cible.cible), self.expression(cible.index)
+
+        def aff_index(env, v):
+            c, i = conteneur(env), index(env)
+            if isinstance(c, dict):
+                c[i] = v
+                return
+            if not isinstance(c, list):
+                raise erreur(f"impossible de modifier un élément d'un {nom_type_valeur(c)}", cible)
+            if not isinstance(i, int) or isinstance(i, bool):
+                raise erreur(f"l'index doit être un entier, mais c'est un {nom_type_valeur(i)}", cible.index)
+            if not -len(c) <= i < len(c):
+                raise erreur(f"index {i} hors limites (liste de {len(c)} éléments)", cible.index)
+            c[i] = v
+        return aff_index
+
+    def e_Conditionnelle(self, c: Conditionnelle) -> Fn:
+        cond, alors, sinon = self.expression(c.condition), self.expression(c.alors), self.expression(c.sinon)
+        return lambda env: alors(env) if cond(env) else sinon(env)
+
     def i_DeclFonction(self, f: DeclFonction) -> Fn:
         fabriquer = self.fabrique_fonction(f)
         nom = f.nom
@@ -850,6 +945,8 @@ class Interpreteur:
             def comparer(a, b):
                 if (est_nombre(a) and est_nombre(b)) or (isinstance(a, str) and isinstance(b, str)):
                     return cmp(a, b)
+                if isinstance(a, ValeurEnum) and isinstance(b, ValeurEnum) and a.enum == b.enum:
+                    return cmp(a.indice, b.indice)
                 raise erreur(f"'{op}' ne peut pas comparer un {nom_type_valeur(a)} et un {nom_type_valeur(b)}", noeud)
             return comparer
         if op == "==":
@@ -904,6 +1001,18 @@ class Interpreteur:
                     return o.env.vars[nom]
                 except KeyError:
                     raise erreur(f"le module '{o.nom}' ne définit pas '{nom}'", m) from None
+            if isinstance(o, EnumNck):
+                if nom in o.par_nom:
+                    return o.par_nom[nom]
+                if nom == "valeurs":
+                    return list(o.valeurs)
+                raise erreur(f"l'énumération '{o.nom}' n'a pas de valeur '{nom}'", m)
+            if isinstance(o, ValeurEnum):
+                if nom == "nom":
+                    return o.nom
+                if nom == "indice":
+                    return o.indice
+                raise erreur(f"une valeur de '{o.enum}' n'a pas de champ '{nom}'", m)
             if isinstance(o, ClasseNck):
                 if nom in o.statiques:
                     return o.statiques[nom]
@@ -962,6 +1071,20 @@ class Interpreteur:
                     raise
             return construire
 
+        if isinstance(a.cible, Membre) and getattr(a, "methode_native", False):
+            # `liste.ajouter(x)` ≡ `ajouter(liste, x)`
+            objet = self.expression(a.cible.objet)
+            fn = natif.fn
+
+            def appel_methode_native(env):
+                try:
+                    return fn(objet(env), *[g(env) for g in args])
+                except ErreurNck as exc:
+                    if exc.ligne == 0:
+                        exc.ligne, exc.colonne, exc.fichier = a.ligne, a.colonne, self.fichier
+                    raise
+            return appel_methode_native
+
         if isinstance(a.cible, Membre):
             # Appel de méthode : évite de créer une fonction liée à chaque appel.
             objet = self.expression(a.cible.objet)
@@ -993,6 +1116,13 @@ class Interpreteur:
                     if meth is None:
                         raise erreur(f"la classe parente '{o.classe.nom}' n'a pas de méthode '{nom_m}'", noeud_m)
                     return meth(o.objet, *evaluer_args(env))
+                if nom_m in NATIFS:   # valeur 'quelconque' : notation méthode résolue à l'exécution
+                    try:
+                        return NATIFS[nom_m].fn(o, *evaluer_args(env))
+                    except ErreurNck as exc:
+                        if exc.ligne == 0:
+                            exc.ligne, exc.colonne, exc.fichier = a.ligne, a.colonne, self.fichier
+                        raise
                 raise erreur(f"un {nom_type_valeur(o)} n'a pas de méthode '{nom_m}'", noeud_m)
             return appel_methode
 

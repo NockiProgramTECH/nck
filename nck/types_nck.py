@@ -56,6 +56,15 @@ class TypeClasse(Type):
 
 
 @dataclass(frozen=True)
+class TypeEnum(Type):
+    """Type d'une valeur d'énumération (`Couleur.ROUGE`). `valeurs` : noms dans l'ordre."""
+    valeurs: tuple[str, ...] = field(default_factory=tuple)
+
+    def __str__(self) -> str:
+        return self.nom
+
+
+@dataclass(frozen=True)
 class TypeModule(Type):
     """Type d'un module importé (`importer "x.nck"`). `chemin` est le chemin absolu du fichier."""
     chemin: str = ""
@@ -222,6 +231,8 @@ def valeur_compatible(v: object, t: Type) -> bool:
         return True
     if est_optionnel(t):
         return v is None or valeur_compatible(v, t.params[0])
+    if isinstance(t, TypeEnum):
+        return getattr(v, "enum", None) == t.nom and type(v).__name__ == "ValeurEnum"
     if t == ENTIER:
         return isinstance(v, int) and not isinstance(v, bool)
     if t == REEL:

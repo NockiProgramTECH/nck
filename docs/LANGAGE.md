@@ -39,6 +39,30 @@ Règles :
 
 Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instructions sur une ligne).
 
+### Déclaration et affectation multiples
+
+```
+variable a, b = 1, "deux"        // chaque variable prend le type de sa valeur
+a, b = 2, "trois"
+x, y = y, x                      // échange en une ligne
+
+variable mini, maxi = [4, 9]     // déstructuration d'une liste (2 variables ⇒ 2 éléments, vérifié à l'exécution)
+fonction bornes(l: liste<entier>) -> liste<entier>:
+    retourner l.minimum(), l.maximum()      // `retourner a, b` renvoie la liste [a, b]
+fin
+variable bas, haut = bornes([3, 7, 5])
+```
+
+### Textes multi-lignes
+
+```
+variable aide = """
+    Usage : nck fichier.nck
+      -v  affiche la version
+    """
+```
+Le retour à la ligne qui suit `"""` est ignoré et l'indentation commune est retirée : le texte peut rester aligné avec le code.
+
 ## 3. Types
 
 | Type               | Exemple                          | Description                              |
@@ -137,6 +161,15 @@ si (a == b): ecrire("égaux") sinon: ecrire("différents")
 ```
 
 La condition doit être un `booleen` (pas `si (3)`).
+
+### Expression conditionnelle `si … alors … sinon …`
+
+Pour choisir une **valeur** (et non exécuter un bloc) :
+```
+variable statut = si age >= 18 alors "majeur" sinon "mineur"
+ecrire(si nom != nul alors nom.majuscule() sinon "inconnu")   // le type nul est affiné dans la branche 'alors'
+```
+Le `sinon` est obligatoire ; les deux branches doivent avoir des types compatibles (`alors 1 sinon "a"` → erreur). Une branche `nul` donne un type optionnel (`si ok alors "x" sinon nul` est un `texte?`).
 
 ### `selon` / `cas`
 
@@ -500,9 +533,61 @@ depuis "outils/maths.nck" importer carre, PI // noms importés directement : car
 - `depuis … importer x` copie la **valeur** de `x` au moment de l'import.
 - Les noms de classes doivent être uniques entre tous les modules d'un programme.
 
+## 12 bis. Énumérations
+
+Une énumération est un ensemble fermé de valeurs nommées. Plus sûr qu'un texte ou un entier : le vérificateur connaît toutes les valeurs possibles.
+
+```
+enumeration Couleur: ROUGE, VERT, BLEU fin
+
+enumeration Etat:          // aussi sur plusieurs lignes
+    OUVERT
+    FERME
+fin
+
+variable c = Couleur.VERT
+ecrire(c)                  // Couleur.VERT
+ecrire(c.nom, c.indice)    // VERT 1
+ecrire(Couleur.valeurs)    // [Couleur.ROUGE, Couleur.VERT, Couleur.BLEU]
+ecrire(c == Couleur.VERT, Couleur.ROUGE < Couleur.BLEU)    // vrai vrai (ordre de déclaration)
+
+fonction temperature(c: Couleur) -> texte:
+    selon c:
+        cas Couleur.ROUGE: retourner "chaud"
+        cas Couleur.VERT, Couleur.BLEU: retourner "froid"
+    fin                    // sans 'sinon', le vérificateur exige que TOUS les cas soient traités
+fin
+
+variable prix: dico<Couleur, entier> = {Couleur.ROUGE: 10}   // utilisable comme clé
+```
+
+Si une valeur est oubliée dans un `selon` sans `sinon` : *« ce 'selon' sur Couleur n'est pas complet : il manque Couleur.BLEU »*. Les énumérations se partagent entre modules comme les classes.
+
 ## 13. Fonctions natives
 
 La liste complète avec signatures et descriptions est dans [`NATIFS.md`](NATIFS.md) (et au survol dans VS Code).
+
+### Notation méthode
+
+Toute fonction native dont le premier paramètre est une liste, un texte, un dico ou un nombre peut s'écrire **comme une méthode** : `valeur.nom(autres arguments)`. Les deux formes sont équivalentes ; la notation méthode permet le chaînage et l'autocomplétion après le `.`.
+
+```
+nombres.ajouter(5)                    ≡  ajouter(nombres, 5)
+nom.majuscule()                       ≡  majuscule(nom)
+l.filtrer(fonction(x): x > 1).appliquer(fonction(x): x * 10).somme()
+" a-b ".nettoyer().decouper("-")
+d.obtenir("cle") ?? 0
+3.7.arrondir()      (-4).absolu()
+```
+
+| Type | Méthodes disponibles |
+|---|---|
+| `liste` | longueur, ajouter, inserer, retirer, contient, position, appliquer, filtrer, reduire, chaque, trouver, tous, au_moins_un, trier, inverser, copier, tranche, somme, minimum, maximum, joindre, texte, vers_json |
+| `texte` | longueur, contient, position, tranche, majuscule, minuscule, nettoyer, remplacer, decouper, commence_par, termine_par, code, formater, est_nombre, est_entier, remplir_gauche, remplir_droite, entier, reel, booleen, depuis_json, lire_fichier, lire_lignes, ecrire_fichier, fichier_existe, dossier_existe |
+| `dico` | longueur, contient, cles, valeurs, obtenir, fusionner, copier, vers_json |
+| `entier` | texte, reel, absolu, puissance, caractere, division_entiere, date, formater_date |
+| `reel` | texte, entier, absolu, racine, puissance, arrondir, plancher, plafond, date, formater_date |
+| `booleen` | texte, entier |
 
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
@@ -575,6 +660,6 @@ Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moin
 
 ## 15. Mots réservés
 
-`variable constante fonction classe herite statique abstraite essayer attraper enfin lever importer depuis comme retourner si sinon selon cas tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe enumeration herite statique abstraite alors essayer attraper enfin lever importer depuis comme retourner si sinon selon cas tantque pour dans fin arreter continuer et ou non vrai faux nul`
 
 `soi` et `parent` sont définis automatiquement dans les méthodes.

@@ -6,13 +6,13 @@ Les positions reçues et renvoyées sont en base 1 (ligne, colonne), comme les e
 
 import re
 
-from .documentation import MOTS_CLES_DOC, NATIFS_DOC, TYPES_DOC
+from .documentation import METHODES_PAR_TYPE, MOTS_CLES_DOC, NATIFS_DOC, TYPES_DOC
 from .erreurs import ErreurNck
 from .lexeur import MOTS_CLES
 from .modules import Chargeur
 from .natifs import NATIFS
 from .parseur import parser
-from .types_nck import TypeClasse, TypeFonction, TypeModule
+from .types_nck import TypeClasse, TypeEnum, TypeFonction, TypeModule
 from .verificateur import TYPE_META_CLASSE, Verificateur
 
 IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
@@ -259,10 +259,30 @@ class Analyse:
                 items.append(self._item(n, "fonction", str(tm), info.descriptions.get(n, ""),
                                         insertion=n + ("()" if not tm.parametres else "(")))
             return items
+        elif base in self.verif.enums:
+            te = self.verif.enums[base]
+            for i, v in enumerate(te.valeurs):
+                items.append(self._item(v, "constante", base, f"{base}.{v} (valeur {i} de l'énumération)"))
+            items.append(self._item("valeurs", "champ", f"liste<{base}>", "Toutes les valeurs de l'énumération, dans l'ordre."))
+            return items
         else:
             d = self.symbole_visible(base, ligne)
             if d is not None and d["symbole"] is not None:
                 t = d["symbole"].type
+        if isinstance(t, TypeEnum):
+            items.append(self._item("nom", "champ", "texte", "Nom de la valeur (ex : \"ROUGE\")."))
+            items.append(self._item("indice", "champ", "entier", "Position de la valeur dans l'énumération (0, 1, 2…)."))
+            return items
+        if t is not None and not isinstance(t, (TypeClasse, TypeModule)) and t.nom in METHODES_PAR_TYPE:
+            # notation méthode sur les valeurs de base : liste.ajouter(x), texte.majuscule()…
+            for n in METHODES_PAR_TYPE[t.nom]:
+                sig, doc = NATIFS_DOC.get(n, (n + "(...)", ""))
+                # signature sans le premier paramètre (la valeur elle-même)
+                interieur = sig[sig.index("(") + 1:sig.rindex(")")]
+                reste = interieur.split(", ", 1)[1] if ", " in interieur else ""
+                retour = sig[sig.rindex(")") + 1:]
+                items.append(self._item(n, "méthode", f"({reste}){retour}", doc, insertion=n + ("()" if not reste else "(")))
+            return items
         if isinstance(t, TypeClasse) and t.nom in self.verif.classes:
             info = self.verif.classes[t.nom]
             for n, tc in info.champs.items():

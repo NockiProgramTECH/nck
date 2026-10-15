@@ -41,6 +41,10 @@ def vers_texte(v: object) -> str:
         return v.classe.nom + "(" + ", ".join(f"{k}={_repr_elem(x)}" for k, x in v.champs.items()) + ")"
     if isinstance(v, ClasseNck):
         return f"<classe {v.nom}>"
+    if isinstance(v, ValeurEnum):
+        return f"{v.enum}.{v.nom}"
+    if isinstance(v, EnumNck):
+        return f"<enumeration {v.nom}>"
     if isinstance(v, ParentNck):
         return f"<parent {v.classe.nom}>"
     if isinstance(v, ModuleNck):
@@ -79,6 +83,10 @@ def nom_type_valeur(v: object) -> str:
         return v.classe.nom
     if isinstance(v, ClasseNck):
         return "classe"
+    if isinstance(v, ValeurEnum):
+        return v.enum
+    if isinstance(v, EnumNck):
+        return "enumeration"
     if isinstance(v, ModuleNck):
         return "module"
     return type(v).__name__
@@ -105,6 +113,36 @@ class ClasseNck:
 
     def est(self, nom: str) -> bool:
         return self.nom == nom or nom in self.ancetres
+
+
+class ValeurEnum:
+    """Une valeur d'énumération : `Couleur.ROUGE`. Une seule instance par valeur (comparaison par identité)."""
+
+    __slots__ = ("enum", "nom", "indice")
+
+    def __init__(self, enum: str, nom: str, indice: int):
+        self.enum = enum
+        self.nom = nom
+        self.indice = indice
+
+    def __lt__(self, autre):
+        if isinstance(autre, ValeurEnum) and autre.enum == self.enum:
+            return self.indice < autre.indice
+        return NotImplemented
+
+    def __repr__(self):
+        return f"{self.enum}.{self.nom}"
+
+
+class EnumNck:
+    """Une énumération : `Couleur`, avec ses valeurs."""
+
+    __slots__ = ("nom", "valeurs", "par_nom")
+
+    def __init__(self, nom: str, noms: list[str]):
+        self.nom = nom
+        self.valeurs = [ValeurEnum(nom, n, i) for i, n in enumerate(noms)]
+        self.par_nom = {v.nom: v for v in self.valeurs}
 
 
 class ParentNck:

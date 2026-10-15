@@ -6,7 +6,7 @@ from .erreurs import ErreurLexicale
 MOTS_CLES = {
     "variable", "constante", "fonction", "retourner",
     "si", "sinon", "tantque", "pour", "dans", "fin",
-    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme", "selon", "cas", "statique", "abstraite", "parent",
+    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme", "selon", "cas", "statique", "abstraite", "parent", "alors", "enumeration",
     "et", "ou", "non",
     "vrai", "faux", "nul",
 }
@@ -176,6 +176,40 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
             mot = source[i:j]
             jetons.append(Jeton("motcle" if mot in MOTS_CLES else "ident", mot, l0, c0))
             i = j
+            continue
+
+        # Textes multi-lignes """ ... """
+        if source.startswith('"""', i) or source.startswith("'''", i):
+            l0, c0 = ligne, col()
+            triple = source[i:i + 3]
+            i += 3
+            if i < n and source[i] == "\n":        # le retour à la ligne juste après l'ouverture est ignoré
+                i += 1
+                ligne += 1
+                debut_ligne = i
+            morceaux = []
+            while True:
+                if i >= n:
+                    raise ErreurLexicale("texte multi-lignes non fermé (il manque \"\"\")", l0, c0, fichier)
+                if source.startswith(triple, i):
+                    i += 3
+                    break
+                ch = source[i]
+                if ch == "\\" and i + 1 < n:
+                    morceaux.append(ECHAPPEMENTS.get(source[i + 1], "\\" + source[i + 1]))
+                    i += 2
+                    continue
+                if ch == "\n":
+                    ligne += 1
+                    debut_ligne = i + 1
+                morceaux.append(ch)
+                i += 1
+            texte = "".join(morceaux)
+            # retire l'indentation commune (pour écrire le texte aligné avec le code)
+            lignes = texte.split("\n")
+            indent = min((len(l) - len(l.lstrip(" ")) for l in lignes if l.strip()), default=0)
+            texte = "\n".join(l[indent:] if l.strip() else l.strip(" ") for l in lignes)
+            jetons.append(Jeton("texte", texte, l0, c0))
             continue
 
         # Chaînes de caractères

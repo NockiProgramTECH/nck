@@ -111,6 +111,8 @@ MOTS_CLES_DOC: dict[str, str] = {
     "classe": "Déclare une classe : champs typés (`nom: texte = defaut`) et méthodes (`fonction …`).",
     "herite": "Héritage : `classe Enfant herite Parent:`.",
     "soi": "L'objet courant dans une méthode (`soi.champ`).",
+    "enumeration": "Ensemble fermé de valeurs nommées : `enumeration Couleur: ROUGE, VERT fin` puis `Couleur.ROUGE`.",
+    "alors": "Expression conditionnelle : `si condition alors valeur sinon autre`.",
     "parent": "Dans une méthode, accès à la classe parente : `parent.methode()`.",
     "statique": "Méthode de classe, appelée sans objet : `statique fonction creer()` puis `Classe.creer()`.",
     "abstraite": "Méthode sans corps que les classes enfants doivent implémenter ; la classe ne peut pas être instanciée.",
@@ -141,4 +143,21 @@ TYPES_DOC: dict[str, str] = {
     "quelconque": "N'importe quelle valeur (vérifiée à l'exécution).",
     "rien": "Type de retour d'une fonction sans valeur.",
     "Erreur": "Classe de base des erreurs (champ `message: texte`).",
+}
+
+
+# Fonctions natives utilisables en notation méthode : `valeur.nom(args)` ≡ `nom(valeur, args)`.
+# Clé : nom du type de base ("liste", "texte", "dico", "entier", "reel", "booleen").
+METHODES_PAR_TYPE: dict[str, list[str]] = {
+    "liste": ["longueur", "ajouter", "inserer", "retirer", "contient", "position", "appliquer", "filtrer", "reduire",
+              "chaque", "trouver", "tous", "au_moins_un", "trier", "inverser", "copier", "tranche", "somme",
+              "minimum", "maximum", "joindre", "texte", "vers_json"],
+    "texte": ["longueur", "contient", "position", "tranche", "majuscule", "minuscule", "nettoyer", "remplacer",
+              "decouper", "commence_par", "termine_par", "code", "formater", "est_nombre", "est_entier",
+              "remplir_gauche", "remplir_droite", "entier", "reel", "booleen", "depuis_json", "lire_fichier",
+              "lire_lignes", "ecrire_fichier", "fichier_existe", "dossier_existe"],
+    "dico": ["longueur", "contient", "cles", "valeurs", "obtenir", "fusionner", "copier", "vers_json"],
+    "entier": ["texte", "reel", "absolu", "puissance", "caractere", "division_entiere", "date", "formater_date"],
+    "reel": ["texte", "entier", "absolu", "racine", "puissance", "arrondir", "plancher", "plafond", "date", "formater_date"],
+    "booleen": ["texte", "entier"],
 }

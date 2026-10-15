@@ -821,3 +821,35 @@ def test_plage():
 def test_filtrer_type():
     with pytest.raises(ErreurType, match="booleen"):
         run("ecrire(filtrer([1], fonction(x): x + 1))\n")
+
+
+# ---------- v0.11 : énumérations, notation méthode, conditionnelle, affectation multiple ----------
+
+
+def test_exemple_confort2():
+    out = run((RACINE / "exemples" / "confort2.nck").read_text(encoding="utf-8"))
+    assert out.startswith("Couleur.VERT VERT 1 froid [Couleur.ROUGE, Couleur.VERT, Couleur.BLEU] vrai vrai\n10\n4 [1, 2, 3, 5] [30, 20, 50]\n")
+    assert "2 trois\n2 1\n11\nmajeur 0\nBonjour,\n  le monde !\nFin.\n" in out
+
+
+def test_selon_enum_incomplet():
+    with pytest.raises(ErreurType, match="n'est pas complet"):
+        run("enumeration C: A, B fin\nfonction f(c: C) -> texte:\n    selon c:\n        cas C.A: retourner \"a\"\n    fin\nfin\n")
+
+
+def test_methode_native_inconnue():
+    with pytest.raises(ErreurType, match="ajouter"):
+        run("variable l = [1]\nl.ajoutr(2)\n")
+    with pytest.raises(ErreurType, match="parenthèses"):
+        run("variable l = [1]\necrire(l.longueur)\n")
+
+
+def test_conditionnelle_types():
+    with pytest.raises(ErreurType, match="incompatibles"):
+        run("variable s = si vrai alors 1 sinon \"a\"\n")
+    assert run("variable n = si 1 > 0 alors \"p\" sinon nul\necrire(n ?? \"-\")\n") == "p\n"
+
+
+def test_destructuration_taille():
+    with pytest.raises(ErreurExecution, match="3 élément"):
+        run("variable a, b = [1, 2, 3]\n")

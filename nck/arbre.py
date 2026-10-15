@@ -98,6 +98,38 @@ class DeclVariable(Noeud):
 
 
 @dataclass
+class DeclMultiple(Noeud):
+    """`variable a, b = 1, 2` ou `variable a, b = liste` (déstructuration)."""
+    noms: list[str]
+    valeurs: list[Expr]            # autant que de noms, ou une seule (liste à déstructurer)
+    constante: bool = False
+    positions: list[tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass
+class AffectationMultiple(Noeud):
+    """`a, b = b, a` ou `a, b = liste`."""
+    cibles: list[Expr]
+    valeurs: list[Expr]
+
+
+@dataclass
+class DeclEnum(Noeud):
+    """`enumeration Couleur: ROUGE, VERT, BLEU fin`."""
+    nom: str
+    valeurs: list[str]
+    positions: list[tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass
+class Conditionnelle(Noeud):
+    """`si condition alors a sinon b` (expression)."""
+    condition: Expr
+    alors: Expr
+    sinon: Expr
+
+
+@dataclass
 class Affectation(Noeud):
     cible: Expr             # Identifiant ou Index
     valeur: Expr
