@@ -1,0 +1,40 @@
+// Fonctions anonymes, fonctions de listes, types optionnels (texte?, ??), plages (a..b)
+variable nombres = [1, 2, 3, 4, 5, 6]
+ecrire(appliquer(nombres, fonction(x): x * 2))
+ecrire(filtrer(nombres, fonction(x): x % 2 == 0))
+ecrire(reduire(nombres, fonction(acc, x): acc + x, 0))
+ecrire(trouver(nombres, fonction(x): x > 4))
+ecrire(tous(nombres, fonction(x): x > 0), au_moins_un(nombres, fonction(x): x > 10))
+chaque(["a", "b"], fonction(s): ecrire("->", s))
+variable double = fonction(x: entier) -> entier: retourner x * 2
+ecrire(double(21))
+variable somme = fonction(a: entier, b: entier):
+    variable r = a + b
+    retourner r
+fin
+ecrire(somme(1, 2))
+fonction appliquer2(f: fonction<texte, texte>, s: texte) -> texte: retourner f(s)
+ecrire(appliquer2(fonction(s): majuscule(s), "ok"))
+
+pour i dans 0..3:
+    ecrire(i)
+fin
+
+variable prenom: texte? = nul
+ecrire(prenom ?? "inconnu")
+prenom = "Awa"
+si prenom != nul:
+    ecrire(longueur(prenom))
+fin
+fonction saluer(nom: texte?) -> texte:
+    si nom == nul:
+        retourner "Bonjour !"
+    fin
+    retourner "Bonjour " + nom
+fin
+ecrire(saluer(nul), saluer("Issa"))
+variable ages = {"awa": 30}
+variable a = obtenir(ages, "issa")
+ecrire(a, a ?? 0)
+variable t = trouver(["x", "yy"], fonction(s): longueur(s) == 2)
+ecrire(t)

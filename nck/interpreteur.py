@@ -9,7 +9,7 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, Etalement, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
@@ -455,6 +455,20 @@ class Interpreteur:
             return v.appeler
         return v
 
+    def e_FonctionAnonyme(self, fa: FonctionAnonyme) -> Fn:
+        if fa.expression is not None:
+            if getattr(fa, "corps_est_instruction", False):
+                corps = Bloc([ExprInstr(fa.expression, ligne=fa.ligne, colonne=fa.colonne)], ligne=fa.ligne, colonne=fa.colonne)
+            else:
+                r = Retourner(fa.expression, ligne=fa.ligne, colonne=fa.colonne)
+                r.verif_runtime = False  # type: ignore[attr-defined]
+                corps = Bloc([r], ligne=fa.ligne, colonne=fa.colonne)
+        else:
+            corps = fa.corps
+        decl = DeclFonction("fonction anonyme", fa.parametres, fa.type_retour, corps, ligne=fa.ligne, colonne=fa.colonne)
+        fabriquer = self.fabrique_fonction(decl)
+        return lambda env: fabriquer(env)
+
     def fabrique_fonction(self, f: DeclFonction, methode: bool = False):
         """Retourne `fabriquer(env_def, classe=None) -> FonctionNck`. Une méthode reçoit l'objet (`soi`) en premier argument.
         Les décorateurs (`@deco`) sont appliqués à la définition : `f = deco(f)`."""
@@ -707,6 +721,20 @@ class Interpreteur:
         tg = b.gauche.type  # type: ignore[attr-defined]
         td = b.droite.type  # type: ignore[attr-defined]
         op = b.op
+        if op == "??":
+            def sinon_nul(env):
+                v = g(env)
+                return d(env) if v is None else v
+            return sinon_nul
+        if op == "..":
+            erreur = self.erreur
+
+            def plage(env):
+                a, z = g(env), d(env)
+                if not isinstance(a, int) or not isinstance(z, int) or isinstance(a, bool) or isinstance(z, bool):
+                    raise erreur(f"'..' attend deux entiers, mais reçoit un {nom_type_valeur(a)} et un {nom_type_valeur(z)}", b)
+                return list(range(a, z))
+            return plage
         if isinstance(tg, TypeClasse) or isinstance(td, TypeClasse):
             fn = self.operateur_objet(op, b)
             return lambda env: fn(g(env), d(env))

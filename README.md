@@ -169,5 +169,6 @@ pytest
 - [x] v0.7 — textes formatés `f"..."`, paramètres par défaut, `selon`/`cas`, `pour i, x dans`
 - [x] v0.8 — serveur d'analyse pour VS Code : autocomplétion, survol, signature, définition, erreurs en direct
 - [x] v0.9 — POO complète (`parent`, `statique`, `constante` de classe, privé `_x`, `abstraite`, `est_un`, surcharge d'opérateurs), décorateurs `@deco`, `...args`
-- [ ] v0.10 — interface graphique (fenêtres, boutons, champs) sans dépendance
+- [x] v0.10 — fonctions anonymes `fonction(x): x * 2`, `appliquer`/`filtrer`/`reduire`…, types optionnels `texte?` + `??`, plages `a..b`
+- [ ] v0.11 — interface graphique (fenêtres, boutons, champs) sans dépendance
 - [ ] réécriture du moteur en C

@@ -32,6 +32,13 @@ Cette page est générée depuis `nck/documentation.py` (la même source que le 
 | `retirer(l: liste<T>, index: entier = -1) -> T` | Retire et retourne l'élément à l'index (le dernier par défaut). Pour un dico : `retirer(d, cle)`. |
 | `contient(c: liste | texte | dico, x) -> booleen` | Vrai si la liste contient `x`, si le texte contient le sous-texte, ou si le dico a la clé. |
 | `position(c: liste | texte, x) -> entier` | Index de la première occurrence, ou -1 si absent. |
+| `appliquer(l: liste<T>, f: fonction<T, R>) -> liste<R>` | Nouvelle liste obtenue en appliquant `f` à chaque élément : `appliquer(l, fonction(x): x * 2)`. |
+| `filtrer(l: liste<T>, f: fonction<T, booleen>) -> liste<T>` | Éléments pour lesquels `f` retourne vrai. |
+| `reduire(l: liste<T>, f: fonction<R, T, R>, initial: R) -> R` | Combine les éléments : `reduire(l, fonction(acc, x): acc + x, 0)`. |
+| `chaque(l: liste<T>, f: fonction<T, rien>) -> rien` | Appelle `f` sur chaque élément (pour les effets, ex : ecrire). |
+| `trouver(l: liste<T>, f: fonction<T, booleen>) -> T?` | Premier élément pour lequel `f` retourne vrai, ou nul. |
+| `tous(l: liste<T>, f: fonction<T, booleen>) -> booleen` | Vrai si `f` retourne vrai pour tous les éléments. |
+| `au_moins_un(l: liste<T>, f: fonction<T, booleen>) -> booleen` | Vrai si `f` retourne vrai pour au moins un élément. |
 | `trier(l: liste<T>) -> liste<T>` | Nouvelle liste triée par ordre croissant. |
 | `inverser(l: liste<T>) -> liste<T>` | Nouvelle liste dans l'ordre inverse. |
 | `copier(x: liste | dico) -> liste | dico` | Copie superficielle d'une liste ou d'un dico. |
@@ -46,7 +53,7 @@ Cette page est générée depuis `nck/documentation.py` (la même source que le 
 |---|---|
 | `cles(d: dico<K, V>) -> liste<K>` | Liste des clés du dictionnaire (dans l'ordre d'insertion). |
 | `valeurs(d: dico<K, V>) -> liste<V>` | Liste des valeurs du dictionnaire. |
-| `obtenir(d: dico<K, V>, cle: K, defaut: V) -> V` | Valeur associée à la clé, ou `defaut` si la clé est absente (nul sans défaut). |
+| `obtenir(d: dico<K, V>, cle: K, defaut: V) -> V` | Valeur associée à la clé, ou `defaut` si la clé est absente. Sans `defaut`, le résultat est un `V?` (peut être nul). |
 | `fusionner(a: dico, b: dico) -> dico` | Nouveau dico contenant les entrées de `a` puis de `b` (qui l'emporte). |
 
 ## Textes

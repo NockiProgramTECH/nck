@@ -51,6 +51,7 @@ Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instruct
 | `dico<K, V>`       | `{"a": 1}`, `dico<texte, entier>` | dictionnaire clé → valeur (clé : `texte`, `entier` ou `booleen`) |
 | `fonction<A, B, R>`| `fonction<entier, entier, entier>` | fonction prenant `A, B` et renvoyant `R` |
 | `NomDeClasse`      | `Personne`                       | instance d'une classe (voir §10)          |
+| `T?`               | `texte?`, `Personne?`            | valeur de type `T` **ou `nul`** (voir §3 bis) |
 | `quelconque`       | —                                | n'importe quelle valeur (vérifiée à l'exécution) |
 | `rien`             | —                                | type de retour d'une fonction sans valeur |
 | `nul`              | `nul`                            | absence de valeur                        |
@@ -66,6 +67,31 @@ n'est implicite : utilisez `texte(x)`, `entier(x)`, `reel(x)`, `booleen(x)`.
 ecrire(f"Bonjour {nom}, tu as {age + 1} ans ({majuscule(nom)})")
 ```
 
+### 3 bis. Types optionnels `T?`
+
+Une variable d'un type précis ne peut **jamais** valoir `nul` : `variable n: texte = nul` est une erreur. Pour autoriser l'absence de valeur, ajoutez `?` : `texte?`, `entier?`, `Personne?`, `liste<entier>?`.
+
+Le vérificateur interdit d'utiliser un `T?` comme un `T` tant qu'il n'a pas été testé :
+
+```
+variable prenom: texte? = nul
+ecrire(longueur(prenom))          // erreur : texte? (la valeur peut être nul…)
+
+si prenom != nul:
+    ecrire(longueur(prenom))      // ok : ici prenom est un texte
+fin
+ecrire(prenom ?? "inconnu")       // ?? : valeur de repli si nul
+
+fonction saluer(nom: texte?) -> texte:
+    si nom == nul: retourner "Bonjour !"
+    retourner "Bonjour " + nom    // ok : le cas nul est sorti juste au-dessus
+fin
+```
+
+Le type est affiné (`T?` → `T`) après `si x != nul`, dans le `sinon` de `si x == nul`, après un `si x == nul: retourner`, à droite de `x != nul et …` / `x == nul ou …`, et dans `tantque x != nul`. Un `T` se range dans un `T?` sans rien faire ; l'inverse demande un test ou `??`.
+
+`obtenir(dico, cle)` sans valeur par défaut et `trouver(liste, f)` retournent des optionnels.
+
 ## 4. Opérateurs
 
 | Catégorie     | Opérateurs                               | Notes                                            |
@@ -74,8 +100,10 @@ ecrire(f"Bonjour {nom}, tu as {age + 1} ans ({majuscule(nom)})")
 | comparaison   | `==  !=  <  >  <=  >=`                   | `<` etc. sur nombres ou textes                   |
 | logique       | `et  ou  non`                            | évaluation paresseuse                            |
 | texte / liste | `+` (concaténation), `*` entier (répétition), `x[i]` (index, négatif accepté) |
+| optionnel     | `x ?? repli`                             | `x` si non nul, sinon `repli` (voir §3 bis)      |
+| plage         | `a..b`                                   | liste des entiers de `a` à `b - 1`               |
 
-Priorité (du plus faible au plus fort) : `ou` < `et` < `non` < comparaisons < `+ -` < `* / %` < `-` unaire < appel / index.
+Priorité (du plus faible au plus fort) : `??` < `ou` < `et` < `non` < comparaisons < `..` < `+ -` < `* / %` < `-` unaire < appel / index.
 
 ## 5. Blocs
 
@@ -135,6 +163,7 @@ pour i dans intervalle(5):        // 0 1 2 3 4
 pour i dans intervalle(1, 6):     // 1 2 3 4 5
 pour i dans intervalle(10, 0, -2) // 10 8 6 4 2
 pour i dans 5:                    // raccourci de intervalle(5)
+pour i dans 1..6:                 // plage : 1 2 3 4 5 (la borne de droite est exclue)
 pour fruit dans fruits:           // éléments d'une liste
 pour lettre dans "nck":           // caractères d'un texte
 pour cle dans ages:               // clés d'un dictionnaire
@@ -196,6 +225,35 @@ fonction appliquer(f: fonction<entier, entier>, x: entier) -> entier: retourner 
 fonction double(n: entier) -> entier: retourner n * 2
 ecrire(appliquer(double, 21))   // 42
 ```
+
+### Fonctions anonymes
+
+`fonction(paramètres) -> retour: corps` crée une fonction sans nom, utilisable comme n'importe quelle valeur. Trois formes :
+
+```
+variable double = fonction(x: entier) -> entier: retourner x * 2    // instruction courte
+variable triple = fonction(x: entier): x * 3                        // expression : retour implicite
+variable somme = fonction(a: entier, b: entier):                    // bloc
+    variable r = a + b
+    retourner r
+fin
+```
+
+Quand le contexte connaît le type attendu, les types des paramètres (et du retour) se déduisent tout seuls :
+
+```
+variable nombres = [1, 2, 3, 4, 5, 6]
+ecrire(appliquer(nombres, fonction(x): x * 2))          // [2, 4, 6, 8, 10, 12]
+ecrire(filtrer(nombres, fonction(x): x % 2 == 0))       // [2, 4, 6]
+ecrire(reduire(nombres, fonction(acc, x): acc + x, 0))  // 21
+ecrire(trouver(nombres, fonction(x): x > 4))            // 5   (type entier?)
+chaque(nombres, fonction(x): ecrire(x))
+
+fonction au_clic(action: fonction<rien>): action()
+au_clic(fonction(): ecrire("cliqué !"))
+```
+
+Sans contexte (`variable f = fonction(x): …`), il faut écrire le type du paramètre. Fonctions natives acceptant une fonction : `appliquer`, `filtrer`, `reduire`, `chaque`, `trouver`, `tous`, `au_moins_un` (voir [NATIFS.md](NATIFS.md)).
 
 ## 10. Classes (programmation orientée objet)
 

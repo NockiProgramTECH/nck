@@ -9,6 +9,8 @@ class Type:
     params: tuple["Type", ...] = field(default_factory=tuple)
 
     def __str__(self) -> str:
+        if self.nom == "optionnel" and len(self.params) == 1:
+            return f"{self.params[0]}?"
         if self.params:
             return f"{self.nom}<{', '.join(map(str, self.params))}>"
         return self.nom
@@ -120,12 +122,29 @@ def est_numerique(t: Type) -> bool:
     return t in (ENTIER, REEL)
 
 
+def optionnel_de(t: Type) -> Type:
+    """`T?` : une valeur de type T ou nul."""
+    return t if est_optionnel(t) or t in (QUELCONQUE, NUL) else Type("optionnel", (t,))
+
+
+def est_optionnel(t: Type) -> bool:
+    return t.nom == "optionnel" and not isinstance(t, (TypeFonction, TypeClasse))
+
+
+def sans_nul(t: Type) -> Type:
+    return t.params[0] if est_optionnel(t) else t
+
+
 def compatible(source: Type, cible: Type) -> bool:
     """Peut-on placer une valeur de type `source` dans un emplacement de type `cible` ?"""
     if cible == QUELCONQUE or source == QUELCONQUE:
         return True
     if source == cible:
         return True
+    if est_optionnel(cible):
+        return source == NUL or compatible(sans_nul(source), cible.params[0])
+    if est_optionnel(source):
+        return False
     if source == ENTIER and cible == REEL:
         return True
     if source == NUL:
@@ -201,6 +220,8 @@ def valeur_compatible(v: object, t: Type) -> bool:
     """Vérifie à l'exécution qu'une valeur correspond à un type (contrôle profond pour les listes)."""
     if t == QUELCONQUE:
         return True
+    if est_optionnel(t):
+        return v is None or valeur_compatible(v, t.params[0])
     if t == ENTIER:
         return isinstance(v, int) and not isinstance(v, bool)
     if t == REEL:

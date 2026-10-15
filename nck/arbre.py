@@ -151,9 +151,18 @@ class Selon(Noeud):
 @dataclass
 class Parametre(Noeud):
     nom: str
-    type_annot: TypeAnnot
+    type_annot: Optional[TypeAnnot]     # None : type déduit du contexte (fonction anonyme)
     defaut: Optional[Expr] = None
     variadique: bool = False            # ...args
+
+
+@dataclass
+class FonctionAnonyme(Noeud):
+    """`fonction(x: entier) -> entier: retourner x * 2` ou `fonction(x): x * 2` ou forme bloc … fin."""
+    parametres: list[Parametre]
+    type_retour: Optional[TypeAnnot]   # None : déduit
+    corps: Optional["Bloc"]            # forme bloc / instruction courte
+    expression: Optional["Expr"] = None  # forme courte `fonction(x): x * 2`
 
 
 @dataclass

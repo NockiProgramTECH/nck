@@ -776,3 +776,48 @@ def test_variadique_types():
 def test_decorateur_invalide():
     with pytest.raises(ErreurType, match="décorateur"):
         run("fonction d(x: entier) -> entier: retourner x\n@d\nfonction f():\n    ecrire(1)\nfin\n")
+
+
+# ---------- v0.10 : fonctions anonymes, optionnels, plages ----------
+
+
+def test_exemple_fonctions_anonymes():
+    out = run((RACINE / "exemples" / "fonctions_anonymes.nck").read_text(encoding="utf-8"))
+    assert out.startswith("[2, 4, 6, 8, 10, 12]\n[2, 4, 6]\n21\n5\nvrai faux\n")
+    assert "Bonjour ! Bonjour Issa\nnul 0\nyy\n" in out
+
+
+def test_lambda_sans_contexte():
+    with pytest.raises(ErreurType, match="déduire le type du paramètre"):
+        run("variable f = fonction(x): x * 2\n")
+    assert run("variable f = fonction(x: entier): x * 2\necrire(f(4))\n") == "8\n"
+
+
+def test_optionnel_doit_etre_teste():
+    with pytest.raises(ErreurType, match="peut être nul"):
+        run("variable p: texte? = nul\necrire(p + \"x\")\n")
+    with pytest.raises(ErreurType, match="reçoit un nul"):
+        run("variable p: texte = nul\n")
+    out = run("variable p: texte? = \"ab\"\nsi p != nul et longueur(p) > 1:\n    ecrire(longueur(p))\nfin\necrire(p ?? \"?\")\n")
+    assert out == "2\nab\n"
+
+
+def test_retour_precoce_affine():
+    src = "fonction f(n: entier?) -> entier:\n    si n == nul:\n        retourner 0\n    fin\n    retourner n + 1\nfin\necrire(f(nul), f(2))\n"
+    assert run(src) == "0 3\n"
+
+
+def test_sinon_nul_inutile():
+    with pytest.raises(ErreurType, match="inutile"):
+        run("variable a = 1\necrire(a ?? 2)\n")
+
+
+def test_plage():
+    assert run("ecrire(1..4)\npour i dans 0..2:\n    ecrire(i)\nfin\n") == "[1, 2, 3]\n0\n1\n"
+    with pytest.raises(ErreurType, match="entiers"):
+        run("ecrire(1.5..3)\n")
+
+
+def test_filtrer_type():
+    with pytest.raises(ErreurType, match="booleen"):
+        run("ecrire(filtrer([1], fonction(x): x + 1))\n")

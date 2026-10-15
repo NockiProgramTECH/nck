@@ -9,8 +9,8 @@ from typing import Callable
 
 from .erreurs import ErreurExecution, ErreurType
 from .types_nck import (
-    BOOLEEN, ENTIER, QUELCONQUE, REEL, RIEN, TEXTE, Type, cle_de, compatible, element_de,
-    est_dico, est_liste, est_numerique, liste_de, unifier, valeur_de,
+    BOOLEEN, ENTIER, QUELCONQUE, REEL, RIEN, TEXTE, Type, TypeFonction, cle_de, compatible, element_de,
+    est_dico, est_liste, est_numerique, est_optionnel, liste_de, optionnel_de, sans_nul, unifier, valeur_de,
 )
 
 
@@ -221,6 +221,7 @@ class Natif:
     nom: str
     fn: Callable
     verifier: Callable            # (types_args: list[Type], erreur: Callable[[str], ErreurType]) -> Type
+    attendu: Callable | None = None   # (index, types_precedents) -> type attendu de l'argument (typage des lambdas)
 
     def __call__(self, *args):
         return self.fn(*args)
@@ -229,9 +230,9 @@ class Natif:
 NATIFS: dict[str, Natif] = {}
 
 
-def natif(nom: str, verifier: Callable):
+def natif(nom: str, verifier: Callable, attendu: Callable | None = None):
     def deco(fn):
-        NATIFS[nom] = Natif(nom, fn, verifier)
+        NATIFS[nom] = Natif(nom, fn, verifier, attendu)
         return fn
     return deco
 
@@ -523,7 +524,7 @@ def _v_obtenir(types, erreur):
         if not compatible(types[2], valeur_de(t)):
             raise erreur(f"argument 3 de 'obtenir' : {valeur_de(t)} attendu, mais {types[2]} fourni")
         return valeur_de(t)
-    return QUELCONQUE   # peut valoir nul si la clé est absente
+    return optionnel_de(valeur_de(t))   # nul si la clé est absente
 
 
 @natif("obtenir", _v_obtenir)
@@ -574,6 +575,111 @@ def _v_liste_meme(types, erreur, nom, dico_ok=False):
         return types[0]
     _exiger_liste(nom, types[0], 1, erreur)
     return types[0] if est_liste(types[0]) else liste_de(QUELCONQUE)
+
+
+# ----- fonctions d'ordre supérieur sur les listes (acceptent des fonctions anonymes) -----
+
+def _attendu_element(index: int, types: list[Type]):
+    """Pour `f(liste, fonction)` : la fonction attendue reçoit un élément de la liste."""
+    if index == 1 and types and est_liste(types[0]):
+        return TypeFonction("fonction", (), (element_de(types[0]),), QUELCONQUE)
+    if index == 1:
+        return TypeFonction("fonction", (), (QUELCONQUE,), QUELCONQUE)
+    return None
+
+
+def _attendu_reduire(index: int, types: list[Type]):
+    if index == 1 and types:
+        elem = element_de(types[0]) if est_liste(types[0]) else QUELCONQUE
+        return TypeFonction("fonction", (), (QUELCONQUE, elem), QUELCONQUE)
+    return None
+
+
+def _v_ordre_sup(nom: str, types, erreur, retour_bool: bool = False):
+    _arite(nom, types, 2, 2, erreur)
+    _exiger_liste(nom, types[0], 1, erreur)
+    elem = element_de(types[0]) if est_liste(types[0]) else QUELCONQUE
+    tf = types[1]
+    if tf == QUELCONQUE:
+        return elem, QUELCONQUE
+    if not isinstance(tf, TypeFonction):
+        raise erreur(f"argument 2 de '{nom}' : une fonction attendue, mais {tf} fourni")
+    if tf.minimum > 1 or (tf.maximum is not None and tf.maximum < 1):
+        raise erreur(f"argument 2 de '{nom}' : la fonction doit accepter 1 paramètre (un élément), mais : {tf}")
+    if tf.fixes and not compatible(elem, tf.fixes[0]):
+        raise erreur(f"argument 2 de '{nom}' : la fonction attend un {tf.fixes[0]}, mais les éléments sont des {elem}")
+    if retour_bool and tf.retour not in (BOOLEEN, QUELCONQUE):
+        raise erreur(f"argument 2 de '{nom}' : la fonction doit retourner un booleen, mais retourne un {tf.retour}")
+    return elem, tf.retour
+
+
+def _appeler(f, *args):
+    return f.appeler(*args) if isinstance(f, FonctionNck) else f(*args)
+
+
+def _v_appliquer(types, erreur):
+    elem, retour = _v_ordre_sup("appliquer", types, erreur)
+    if retour == RIEN:
+        raise erreur("argument 2 de 'appliquer' : la fonction doit retourner une valeur (utilisez 'chaque' pour un simple parcours)")
+    return liste_de(retour)
+
+
+@natif("appliquer", _v_appliquer, _attendu_element)
+def _appliquer(l, f):
+    return [_appeler(f, x) for x in l]
+
+
+@natif("filtrer", lambda t, e: liste_de(_v_ordre_sup("filtrer", t, e, True)[0]), _attendu_element)
+def _filtrer(l, f):
+    return [x for x in l if _appeler(f, x)]
+
+
+@natif("chaque", lambda t, e: (_v_ordre_sup("chaque", t, e), RIEN)[1], _attendu_element)
+def _chaque(l, f):
+    for x in l:
+        _appeler(f, x)
+
+
+@natif("trouver", lambda t, e: optionnel_de(_v_ordre_sup("trouver", t, e, True)[0]), _attendu_element)
+def _trouver(l, f):
+    for x in l:
+        if _appeler(f, x):
+            return x
+    return None
+
+
+@natif("tous", lambda t, e: (_v_ordre_sup("tous", t, e, True), BOOLEEN)[1], _attendu_element)
+def _tous(l, f):
+    return all(_appeler(f, x) for x in l)
+
+
+@natif("au_moins_un", lambda t, e: (_v_ordre_sup("au_moins_un", t, e, True), BOOLEEN)[1], _attendu_element)
+def _au_moins_un(l, f):
+    return any(_appeler(f, x) for x in l)
+
+
+def _v_reduire(types, erreur):
+    _arite("reduire", types, 3, 3, erreur)
+    _exiger_liste("reduire", types[0], 1, erreur)
+    elem = element_de(types[0]) if est_liste(types[0]) else QUELCONQUE
+    tf, init = types[1], types[2]
+    if tf == QUELCONQUE:
+        return init
+    if not isinstance(tf, TypeFonction) or len(tf.fixes) != 2:
+        raise erreur(f"argument 2 de 'reduire' : une fonction (accumulateur, element) attendue, mais {tf} fourni")
+    if not compatible(elem, tf.fixes[1]):
+        raise erreur(f"argument 2 de 'reduire' : le 2e paramètre de la fonction doit accepter un {elem}")
+    if not compatible(init, tf.fixes[0]) or not compatible(tf.retour, tf.fixes[0]):
+        raise erreur(f"'reduire' : la valeur initiale ({init}), le 1er paramètre ({tf.fixes[0]}) et le retour ({tf.retour}) de la fonction doivent avoir le même type")
+    return tf.retour
+
+
+@natif("reduire", _v_reduire, _attendu_reduire)
+def _reduire(l, f, init):
+    acc = init
+    for x in l:
+        acc = _appeler(f, acc, x)
+    return acc
 
 
 @natif("trier", lambda t, e: _v_liste_meme(t, e, "trier"))

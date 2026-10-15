@@ -4,7 +4,7 @@ from .arbre import (
     Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Cas, Champ, Continuer, DeclClasse, DeclFonction,
     DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral,
     Logique, Membre, Parametre, Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
-    Etalement,
+    Etalement, FonctionAnonyme,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -240,11 +240,57 @@ class Parseur:
                 self.avancer()
                 params.append(self.type_annot())
             self.attendre_op(">")
-        return TypeAnnot(j.valeur, params, ligne=j.ligne, colonne=j.colonne)
+        t = TypeAnnot(j.valeur, params, ligne=j.ligne, colonne=j.colonne)
+        while self.est_op("?"):
+            q = self.avancer()
+            t = TypeAnnot("optionnel", [t], ligne=q.ligne, colonne=q.colonne)
+        return t
 
     def decl_fonction(self, abstraite: bool = False) -> DeclFonction:
         mot = self.avancer()
         nom = self.attendre_ident("nom de fonction attendu")
+        parametres = self.parametres()
+        if self.est_op("->"):
+            self.avancer()
+            type_retour = self.type_annot()
+        else:
+            type_retour = TypeAnnot("rien", ligne=nom.ligne, colonne=nom.colonne)
+        if abstraite:
+            self.fin_instruction()
+            f = DeclFonction(nom.valeur, parametres, type_retour, None, abstraite=True, ligne=mot.ligne, colonne=mot.colonne)
+            f.ligne_fin = mot.ligne  # type: ignore[attr-defined]
+            f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+            return f
+        corps, multi = self.corps("fin")
+        ligne_fin = self.attendre_motcle("fin").ligne if multi else self.jetons[self.pos - 1].ligne
+        f = DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
+        f.ligne_fin = ligne_fin  # type: ignore[attr-defined]
+        f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+        return f
+
+    def fonction_anonyme(self) -> FonctionAnonyme:
+        """`fonction(x: entier) -> entier: retourner x * 2`, `fonction(x): x * 2`, ou forme bloc terminée par `fin`.
+        Les types des paramètres et du retour sont facultatifs (déduits du contexte)."""
+        mot = self.avancer()
+        parametres = self.parametres(types_facultatifs=True)
+        type_retour = None
+        if self.est_op("->"):
+            self.avancer()
+            type_retour = self.type_annot()
+        self.attendre_op(":", "':' attendu après les paramètres de la fonction anonyme")
+        if self.jetons[self.pos].genre == "nl":
+            corps = self.bloc_jusqua("fin")
+            self.attendre_motcle("fin")
+            return FonctionAnonyme(parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
+        j = self.courant()
+        if j.genre == "motcle" and j.valeur in ("retourner", "si", "pour", "tantque", "variable", "constante", "lever", "essayer", "selon"):
+            instr = self.instruction()
+            return FonctionAnonyme(parametres, type_retour, Bloc([instr], ligne=j.ligne, colonne=j.colonne),
+                                   ligne=mot.ligne, colonne=mot.colonne)
+        expr = self.expression()
+        return FonctionAnonyme(parametres, type_retour, None, expr, ligne=mot.ligne, colonne=mot.colonne)
+
+    def parametres(self, types_facultatifs: bool = False) -> list[Parametre]:
         self.attendre_op("(")
         self.profondeur += 1
         parametres: list[Parametre] = []
@@ -265,8 +311,12 @@ class Parseur:
                     if not self.est_op(")"):
                         raise self.erreur(f"le paramètre variadique '...{pnom.valeur}' doit être le dernier")
                     break
-                self.attendre_op(":", f"':' attendu après le paramètre '{pnom.valeur}' pour indiquer son type")
-                ptype = self.type_annot()
+                ptype = None
+                if types_facultatifs and not self.est_op(":"):
+                    pass
+                else:
+                    self.attendre_op(":", f"':' attendu après le paramètre '{pnom.valeur}' pour indiquer son type")
+                    ptype = self.type_annot()
                 defaut = None
                 if self.est_op("="):
                     self.avancer()
@@ -280,23 +330,7 @@ class Parseur:
                 break
         self.profondeur -= 1
         self.attendre_op(")")
-        if self.est_op("->"):
-            self.avancer()
-            type_retour = self.type_annot()
-        else:
-            type_retour = TypeAnnot("rien", ligne=nom.ligne, colonne=nom.colonne)
-        if abstraite:
-            self.fin_instruction()
-            f = DeclFonction(nom.valeur, parametres, type_retour, None, abstraite=True, ligne=mot.ligne, colonne=mot.colonne)
-            f.ligne_fin = mot.ligne  # type: ignore[attr-defined]
-            f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
-            return f
-        corps, multi = self.corps("fin")
-        ligne_fin = self.attendre_motcle("fin").ligne if multi else self.jetons[self.pos - 1].ligne
-        f = DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
-        f.ligne_fin = ligne_fin  # type: ignore[attr-defined]
-        f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
-        return f
+        return parametres
 
     def decl_classe(self) -> DeclClasse:
         mot = self.avancer()
@@ -504,7 +538,15 @@ class Parseur:
     # ----- expressions (par précédence croissante) -----
 
     def expression(self) -> Expr:
-        return self.expr_ou()
+        return self.expr_sinon_nul()
+
+    def expr_sinon_nul(self) -> Expr:
+        g = self.expr_ou()
+        while self.est_op("??"):
+            j = self.avancer()
+            d = self.expr_ou()
+            g = Binaire("??", g, d, ligne=j.ligne, colonne=j.colonne)
+        return g
 
     def expr_ou(self) -> Expr:
         g = self.expr_et()
@@ -529,11 +571,19 @@ class Parseur:
         return self.expr_comparaison()
 
     def expr_comparaison(self) -> Expr:
-        g = self.expr_additive()
+        g = self.expr_plage()
         while self.est_op("==", "!=", "<", ">", "<=", ">="):
             j = self.avancer()
-            d = self.expr_additive()
+            d = self.expr_plage()
             g = Binaire(j.valeur, g, d, ligne=j.ligne, colonne=j.colonne)
+        return g
+
+    def expr_plage(self) -> Expr:
+        g = self.expr_additive()
+        if self.est_op(".."):
+            j = self.avancer()
+            d = self.expr_additive()
+            g = Binaire("..", g, d, ligne=j.ligne, colonne=j.colonne)
         return g
 
     def expr_additive(self) -> Expr:
@@ -651,6 +701,8 @@ class Parseur:
             if j.valeur == "parent":
                 self.avancer()
                 return Identifiant("parent", ligne=j.ligne, colonne=j.colonne)
+            if j.valeur == "fonction":
+                return self.fonction_anonyme()
             raise self.erreur(f"le mot-clé '{j.valeur}' ne peut pas être utilisé ici")
         if j.genre == "ident":
             self.avancer()

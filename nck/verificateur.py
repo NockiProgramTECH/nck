@@ -4,7 +4,7 @@ import os
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, Etalement, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, FonctionAnonyme, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
@@ -13,11 +13,12 @@ from .natifs import NATIFS
 from .types_nck import (
     BOOLEEN, DICO_VIDE, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_CLES, TYPES_SIMPLES,
     Type, TypeClasse, TypeFonction, TypeModule, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
-    est_numerique, liste_de, unifier, valeur_de,
+    est_numerique, est_optionnel, liste_de, optionnel_de, sans_nul, unifier, valeur_de,
 )
 
 TYPE_META_CLASSE = Type("classe")   # type du symbole qui désigne une classe (ex : `Personne`)
 TYPE_ERREUR = TypeClasse("Erreur")  # classe intégrée
+INFERER = Type("<à déduire>")        # type de retour en cours de déduction (fonction anonyme sans annotation)
 
 
 class InfoClasse:
@@ -46,7 +47,7 @@ class InfoClasse:
 
 
 class Symbole:
-    __slots__ = ("type", "constante", "initialisee", "genre", "description", "position", "fichier")
+    __slots__ = ("type", "constante", "initialisee", "genre", "description", "position", "fichier", "type_declare")
 
     def __init__(self, type_: Type, constante: bool = False, initialisee: bool = True,
                  genre: str = "variable", description: str = "", position: tuple[int, int] = (0, 0), fichier: str = ""):
@@ -57,6 +58,7 @@ class Symbole:
         self.description = description    # texte affiché au survol (signature…)
         self.position = position          # (ligne, colonne) de la déclaration
         self.fichier = fichier
+        self.type_declare: Type | None = None   # type d'origine quand le symbole a été affiné (T? -> T)
 
 
 class Portee:
@@ -94,6 +96,7 @@ class Verificateur:
         self.portee = Portee()
         self.racine = self.portee
         self.type_retour_attendu: Type | None = None
+        self.inference_retour: list[Type] = []
         self.profondeur_boucle = 0
         self.chargeur = chargeur if chargeur is not None else Chargeur()
         self.classes: dict[str, InfoClasse] = classes if classes is not None else {}
@@ -120,6 +123,11 @@ class Verificateur:
 
     def resoudre_type(self, annot: TypeAnnot) -> Type:
         nom = annot.nom
+        if nom == "optionnel":
+            interne = self.resoudre_type(annot.params[0])
+            if interne in (RIEN, NUL, QUELCONQUE):
+                raise self.erreur(f"'{interne}?' n'a pas de sens : seul un type précis peut être optionnel (ex : texte?)", annot)
+            return optionnel_de(interne)
         if nom in TYPES_SIMPLES:
             if annot.params:
                 raise self.erreur(f"le type '{nom}' ne prend pas de paramètre", annot)
@@ -370,9 +378,48 @@ class Verificateur:
             if td.retour != QUELCONQUE and not isinstance(td.retour, TypeFonction):
                 raise self.erreur(f"un décorateur doit retourner une fonction, mais celui-ci retourne un {td.retour}", d)
 
-    def bloc(self, bloc: Bloc) -> bool:
+    def affinements(self, e: Expr) -> tuple[dict[str, Type], dict[str, Type]]:
+        """Pour une condition, retourne (types affinés si vraie, types affinés si fausse).
+        Reconnaît `x != nul`, `x == nul`, `non …`, `a et b`, `a ou b`."""
+        if isinstance(e, Binaire) and e.op in ("==", "!="):
+            g, d = e.gauche, e.droite
+            if isinstance(d, Litteral) and d.valeur is None and isinstance(g, Identifiant):
+                ident = g
+            elif isinstance(g, Litteral) and g.valeur is None and isinstance(d, Identifiant):
+                ident = d
+            else:
+                return {}, {}
+            sym = self.portee.chercher(ident.nom)
+            if sym is None or not est_optionnel(sym.type):
+                return {}, {}
+            precis = {ident.nom: sans_nul(sym.type)}
+            return (precis, {}) if e.op == "!=" else ({}, precis)
+        if isinstance(e, Unaire) and e.op == "non":
+            v, f = self.affinements(e.operande)
+            return f, v
+        if isinstance(e, Logique):
+            v1, f1 = self.affinements(e.gauche)
+            v2, f2 = self.affinements(e.droite)
+            if e.op == "et":
+                return {**v1, **v2}, {k: t for k, t in f1.items() if k in f2 and f2[k] == t}
+            return {k: t for k, t in v1.items() if k in v2 and v2[k] == t}, {**f1, **f2}
+        return {}, {}
+
+    def affiner(self, precis: dict[str, Type]) -> None:
+        """Déclare dans la portée courante des copies affinées des symboles (T? devient T)."""
+        for nom, t in precis.items():
+            sym = self.portee.chercher(nom)
+            if sym is None:
+                continue
+            copie = Symbole(t, sym.constante, True, sym.genre, sym.description, sym.position, sym.fichier)
+            copie.type_declare = sym.type_declare or sym.type
+            self.portee.symboles[nom] = copie
+
+    def bloc(self, bloc: Bloc, precis: dict[str, Type] | None = None) -> bool:
         """Vérifie un bloc. Retourne True si le bloc termine toujours (retourner/arreter/continuer)."""
         self.ouvrir()
+        if precis:
+            self.affiner(precis)
         self.pre_declarer_fonctions(bloc.instructions)
         termine = False
         for instr in bloc.instructions:
@@ -391,7 +438,7 @@ class Verificateur:
         if t_annot == RIEN:
             raise self.erreur("une variable ne peut pas être de type 'rien'", d.type_annot)
         if d.valeur is not None:
-            t_val = self.expression(d.valeur)
+            t_val = self.typer(d.valeur, t_annot)
             if t_val == RIEN:
                 raise self.erreur(f"la variable '{d.nom}' reçoit le résultat d'une fonction qui ne retourne rien", d.valeur)
             if t_annot is None:
@@ -404,7 +451,7 @@ class Verificateur:
                 else:
                     t_annot = t_val
             elif not compatible(t_val, t_annot):
-                raise self.erreur(f"'{d.nom}' est de type {t_annot}, mais reçoit un {t_val}", d.valeur)
+                raise self.erreur(f"'{d.nom}' est de type {t_annot}, mais reçoit un {t_val}{self.aide_optionnel(t_val)}", d.valeur)
             d.verif_runtime = (t_val == QUELCONQUE and t_annot != QUELCONQUE)  # type: ignore[attr-defined]
         else:
             d.verif_runtime = False  # type: ignore[attr-defined]
@@ -421,7 +468,7 @@ class Verificateur:
             self.enregistrer(a.cible, a.cible.nom, sym)
             if sym.constante:
                 raise self.erreur(f"'{a.cible.nom}' est une constante : impossible de la modifier", a.cible)
-            t_cible = sym.type
+            t_cible = sym.type_declare or sym.type
             a.cible.type = t_cible  # type: ignore[attr-defined]
             if a.op != "=" and not sym.initialisee:
                 raise self.erreur(f"'{a.cible.nom}' est utilisée avant d'avoir reçu une valeur", a.cible)
@@ -439,7 +486,7 @@ class Verificateur:
             t_conteneur = a.cible.cible.type  # type: ignore[attr-defined]
             if t_conteneur == TEXTE:
                 raise self.erreur("un texte ne peut pas être modifié caractère par caractère", a.cible)
-        t_val = self.expression(a.valeur)
+        t_val = self.typer(a.valeur, t_cible)
         if a.op == "=":
             t_res = t_val
         else:
@@ -447,7 +494,7 @@ class Verificateur:
         if t_res == RIEN:
             raise self.erreur("affectation d'une valeur de type 'rien'", a.valeur)
         if not compatible(t_res, t_cible):
-            raise self.erreur(f"impossible d'affecter un {t_res} à une cible de type {t_cible}", a.valeur)
+            raise self.erreur(f"impossible d'affecter un {t_res} à une cible de type {t_cible}{self.aide_optionnel(t_res)}", a.valeur)
         a.verif_runtime = (t_res == QUELCONQUE and t_cible != QUELCONQUE)  # type: ignore[attr-defined]
         a.type = t_cible  # type: ignore[attr-defined]
         return False
@@ -465,16 +512,30 @@ class Verificateur:
 
     def i_Si(self, s: Si) -> bool:
         self.condition(s.condition, "si")
-        t1 = self.bloc(s.alors)
+        si_vrai, si_faux = self.affinements(s.condition)
+        t1 = self.bloc(s.alors, si_vrai)
         if s.sinon is None:
+            if t1 and si_faux:
+                self.affiner(si_faux)   # `si x == nul: retourner fin` → x est précis ensuite
             return False
-        t2 = self.instruction(s.sinon) if isinstance(s.sinon, Si) else self.bloc(s.sinon)
+        if isinstance(s.sinon, Si):
+            self.ouvrir()
+            self.affiner(si_faux)
+            t2 = self.instruction(s.sinon)
+            self.fermer()
+        else:
+            t2 = self.bloc(s.sinon, si_faux)
+        if t1 and not t2 and si_faux:
+            self.affiner(si_faux)
+        if t2 and not t1 and si_vrai:
+            self.affiner(si_vrai)
         return t1 and t2
 
     def i_TantQue(self, t: TantQue) -> bool:
         self.condition(t.condition, "tantque")
+        si_vrai, _ = self.affinements(t.condition)
         self.profondeur_boucle += 1
-        self.bloc(t.corps)
+        self.bloc(t.corps, si_vrai)
         self.profondeur_boucle -= 1
         return False
 
@@ -564,16 +625,26 @@ class Verificateur:
         if self.type_retour_attendu is None:
             raise self.erreur("'retourner' en dehors d'une fonction", r)
         attendu = self.type_retour_attendu
+        if attendu is INFERER:
+            if r.valeur is None:
+                r.verif_runtime = False  # type: ignore[attr-defined]
+                return True
+            t = self.expression(r.valeur)
+            if t == RIEN:
+                raise self.erreur("'retourner' reçoit le résultat d'une fonction qui ne retourne rien", r.valeur)
+            self.inference_retour.append(t)
+            r.verif_runtime = False  # type: ignore[attr-defined]
+            return True
         if r.valeur is None:
             if attendu != RIEN:
                 raise self.erreur(f"cette fonction doit retourner un {attendu}, mais 'retourner' est vide", r)
             r.verif_runtime = False  # type: ignore[attr-defined]
             return True
-        t = self.expression(r.valeur)
+        t = self.typer(r.valeur, attendu)
         if attendu == RIEN:
             raise self.erreur("cette fonction ne retourne rien ('rien') : utilisez 'retourner' sans valeur", r.valeur)
         if not compatible(t, attendu):
-            raise self.erreur(f"la fonction doit retourner un {attendu}, mais retourne un {t}", r.valeur)
+            raise self.erreur(f"la fonction doit retourner un {attendu}, mais retourne un {t}{self.aide_optionnel(t)}", r.valeur)
         r.verif_runtime = (t == QUELCONQUE and attendu != QUELCONQUE)  # type: ignore[attr-defined]
         r.type_attendu = attendu  # type: ignore[attr-defined]
         return True
@@ -669,6 +740,86 @@ class Verificateur:
 
     # ----- expressions -----
 
+    def typer(self, e: Expr, attendu: Type | None) -> Type:
+        """Comme `expression`, mais transmet le type attendu (typage contextuel des fonctions anonymes)."""
+        if isinstance(e, FonctionAnonyme) and isinstance(attendu, TypeFonction):
+            e.attendu = attendu  # type: ignore[attr-defined]
+        return self.expression(e)
+
+    @staticmethod
+    def aide_optionnel(t: Type) -> str:
+        if est_optionnel(t):
+            return f" (la valeur peut être nul : testez-la avec 'si x != nul' ou donnez une valeur de repli avec 'x ?? valeur')"
+        return ""
+
+    def e_FonctionAnonyme(self, fa: FonctionAnonyme) -> Type:
+        attendu: TypeFonction | None = getattr(fa, "attendu", None)
+        params: list[Type] = []
+        variadique = bool(fa.parametres) and fa.parametres[-1].variadique
+        for i, p in enumerate(fa.parametres):
+            if p.type_annot is not None:
+                t = self.resoudre_type(p.type_annot)
+            elif attendu is not None and i < len(attendu.fixes):
+                t = attendu.fixes[i]
+            elif attendu is not None and attendu.variadique:
+                t = attendu.parametres[-1]
+            else:
+                raise self.erreur(f"impossible de déduire le type du paramètre '{p.nom}' : précisez-le (ex : {p.nom}: entier)", p)
+            if p.variadique and not est_liste(t):
+                raise self.erreur(f"le paramètre '...{p.nom}' doit être une liste", p)
+            params.append(t)
+        obligatoires = sum(1 for p in fa.parametres if p.defaut is None and not p.variadique)
+        retour_annot = self.resoudre_type(fa.type_retour) if fa.type_retour is not None else None
+        # vérification du corps
+        ancien_retour, ancienne_boucle, ancienne_inference = self.type_retour_attendu, self.profondeur_boucle, self.inference_retour
+        self.type_retour_attendu = retour_annot if retour_annot is not None else INFERER
+        self.inference_retour = []
+        self.profondeur_boucle = 0
+        self.ouvrir(nouvelle_fonction=True)
+        self.pile_fonctions.append((fa.ligne, getattr(fa, "ligne_fin", fa.ligne)))
+        noms = set()
+        for p, tp in zip(fa.parametres, params):
+            if p.nom in noms:
+                raise self.erreur(f"paramètre '{p.nom}' en double", p)
+            noms.add(p.nom)
+            if p.defaut is not None:
+                td = self.expression(p.defaut)
+                if not compatible(td, tp):
+                    raise self.erreur(f"la valeur par défaut du paramètre '{p.nom}' doit être un {tp}, mais c'est un {td}", p.defaut)
+            self.declarer(p.nom, tp, p, genre="paramètre")
+        if fa.expression is not None:
+            t_expr = self.expression(fa.expression)
+            if t_expr == RIEN:
+                fa.corps_est_instruction = True  # type: ignore[attr-defined]
+                retour = RIEN
+                if retour_annot not in (None, RIEN):
+                    raise self.erreur(f"cette fonction anonyme doit retourner un {retour_annot}, mais son expression ne retourne rien", fa.expression)
+            else:
+                fa.corps_est_instruction = False  # type: ignore[attr-defined]
+                retour = retour_annot if retour_annot is not None else t_expr
+                if retour_annot is not None and not compatible(t_expr, retour_annot):
+                    raise self.erreur(f"cette fonction anonyme doit retourner un {retour_annot}, mais retourne un {t_expr}", fa.expression)
+            termine = True
+        else:
+            termine = self.bloc(fa.corps)
+            if retour_annot is not None:
+                retour = retour_annot
+            else:
+                types = [t for t in self.inference_retour]
+                retour = RIEN
+                for t in types:
+                    retour = t if retour == RIEN else unifier(retour, t)
+            if retour != RIEN and not termine:
+                raise self.erreur(f"cette fonction anonyme doit retourner un {retour} dans tous les cas (il manque un 'retourner' ?)", fa)
+        self.pile_fonctions.pop()
+        self.fermer()
+        self.type_retour_attendu, self.profondeur_boucle, self.inference_retour = ancien_retour, ancienne_boucle, ancienne_inference
+        t = TypeFonction("fonction", (), tuple(params), retour, obligatoires, variadique)
+        if attendu is not None and not compatible(t, attendu):
+            raise self.erreur(f"cette fonction anonyme ({t}) ne correspond pas au type attendu ({attendu})", fa)
+        fa.type_fonction = t  # type: ignore[attr-defined]
+        return t
+
     def expression(self, e: Expr) -> Type:
         t = getattr(self, "e_" + type(e).__name__)(e)
         e.type = t  # type: ignore[attr-defined]
@@ -741,6 +892,9 @@ class Verificateur:
             raise self.erreur(f"'-' attend un nombre, mais reçoit un {t}", u)
         return t
 
+    def _erreur_sinon_nul(self, base: Type, td: Type, noeud):
+        raise self.erreur(f"'??' : la valeur de repli doit être un {base}, mais c'est un {td}", noeud)
+
     def e_Etalement(self, e) -> Type:
         t = self.expression(e.valeur)
         if t != QUELCONQUE and not est_liste(t):
@@ -777,6 +931,28 @@ class Verificateur:
         return tm.retour
 
     def type_binaire(self, op: str, tg: Type, td: Type, noeud) -> Type:
+        if op == "??":
+            if tg == QUELCONQUE:
+                return QUELCONQUE
+            if not est_optionnel(tg):
+                raise self.erreur(f"'??' est inutile : la valeur de gauche est un {tg}, elle ne peut jamais être nul", noeud)
+            base = sans_nul(tg)
+            if td == NUL or est_optionnel(td):
+                return optionnel_de(base) if compatible(sans_nul(td), base) or td == NUL else self._erreur_sinon_nul(base, td, noeud)
+            if compatible(td, base):
+                return base
+            if compatible(base, td):
+                return td
+            return self._erreur_sinon_nul(base, td, noeud)
+        if op == "..":
+            if tg != ENTIER and tg != QUELCONQUE:
+                raise self.erreur(f"'..' attend deux entiers, mais la borne de gauche est un {tg}", noeud)
+            if td != ENTIER and td != QUELCONQUE:
+                raise self.erreur(f"'..' attend deux entiers, mais la borne de droite est un {td}", noeud)
+            return liste_de(ENTIER)
+        if op not in ("==", "!=") and (est_optionnel(tg) or est_optionnel(td)):
+            t_opt = tg if est_optionnel(tg) else td
+            raise self.erreur(f"'{op}' impossible sur un {t_opt}{self.aide_optionnel(t_opt)}", noeud)
         surcharge = self._operateur_classe(op, tg, td, noeud)
         if surcharge is not None:
             return surcharge
@@ -825,10 +1001,18 @@ class Verificateur:
         raise self.erreur(f"opérateur inconnu '{op}'", noeud)
 
     def e_Logique(self, l: Logique) -> Type:
-        for cote in (l.gauche, l.droite):
-            t = self.expression(cote)
-            if t != BOOLEEN and t != QUELCONQUE:
-                raise self.erreur(f"'{l.op}' attend des booleens, mais reçoit un {t}", cote)
+        t = self.expression(l.gauche)
+        if t != BOOLEEN and t != QUELCONQUE:
+            raise self.erreur(f"'{l.op}' attend des booleens, mais reçoit un {t}", l.gauche)
+        # `x != nul et f(x)` : à droite de 'et', x est précis ; `x == nul ou f(x)` : idem à droite de 'ou'
+        si_vrai, si_faux = self.affinements(l.gauche)
+        precis = si_vrai if l.op == "et" else si_faux
+        self.ouvrir()
+        self.affiner(precis)
+        t = self.expression(l.droite)
+        self.fermer()
+        if t != BOOLEEN and t != QUELCONQUE:
+            raise self.erreur(f"'{l.op}' attend des booleens, mais reçoit un {t}", l.droite)
         return BOOLEEN
 
     def e_Index(self, i: Index) -> Type:
@@ -880,7 +1064,7 @@ class Verificateur:
             dispo = ", ".join(sorted(list(info.statiques) + list(info.constantes))) or "aucun"
             raise self.erreur(f"la classe '{info.nom}' n'a pas de méthode statique ni de constante '{m.nom}' (disponibles : {dispo})", m)
         if not isinstance(t, TypeClasse):
-            raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}')", m)
+            raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}'){self.aide_optionnel(t)}", m)
         info = self.classes[t.nom]
         if m.nom.startswith("_") and (m.nom in info.champs or m.nom in info.methodes):
             if not (isinstance(m.objet, Identifiant) and m.objet.nom in ("soi", "parent")):
@@ -930,9 +1114,9 @@ class Verificateur:
             raise self.erreur(
                 f"il manque le(s) champ(s) obligatoire(s) {', '.join(repr(n) for n in manquants)} pour créer un '{info.nom}'", a)
         for nom, arg in fournis.items():
-            t = self.expression(arg)
+            t = self.typer(arg, info.champs[nom])
             if not compatible(t, info.champs[nom]):
-                raise self.erreur(f"champ '{nom}' de '{info.nom}' : {info.champs[nom]} attendu, mais {t} fourni", arg)
+                raise self.erreur(f"champ '{nom}' de '{info.nom}' : {info.champs[nom]} attendu, mais {t} fourni{self.aide_optionnel(t)}", arg)
         a.champs_fournis = fournis  # type: ignore[attr-defined]
         return info.type
 
@@ -956,7 +1140,10 @@ class Verificateur:
             self.enregistrer(a.cible, a.cible.nom, self.portee.chercher(a.cible.nom))
             if any(isinstance(arg, Etalement) for arg in a.arguments):
                 raise self.erreur(f"'...' n'est pas possible avec la fonction native '{a.cible.nom}'", a)
-            types = [self.expression(arg) for arg in a.arguments]
+            types = []
+            for i, arg in enumerate(a.arguments):
+                attendu = natif.attendu(i, types) if natif.attendu is not None else None
+                types.append(self.typer(arg, attendu))
             for arg, t in zip(a.arguments, types):
                 if t == RIEN:
                     raise self.erreur("cet argument est le résultat d'une fonction qui ne retourne rien", arg)
@@ -964,13 +1151,21 @@ class Verificateur:
             a.verifs_runtime = ()  # type: ignore[attr-defined]
             return natif.verifier(types, lambda msg: self.erreur(msg, a))
         tc = self.expression(a.cible)
-        types = [self.expression(arg) for arg in a.arguments]
+        types = []
+        for i, arg in enumerate(a.arguments):
+            attendu = None
+            if isinstance(tc, TypeFonction) and not isinstance(arg, Etalement):
+                if i < len(tc.fixes):
+                    attendu = tc.fixes[i]
+                elif tc.variadique and tc.parametres[-1].params:
+                    attendu = tc.parametres[-1].params[0]
+            types.append(self.typer(arg, attendu))
         a.natif = None  # type: ignore[attr-defined]
         if tc == QUELCONQUE:
             a.verifs_runtime = ()  # type: ignore[attr-defined]
             return QUELCONQUE
         if not isinstance(tc, TypeFonction):
-            raise self.erreur(f"une valeur de type {tc} ne peut pas être appelée comme une fonction", a)
+            raise self.erreur(f"une valeur de type {tc} ne peut pas être appelée comme une fonction{self.aide_optionnel(tc)}", a)
         nom = a.cible.nom if isinstance(a.cible, Identifiant) else a.cible.nom if isinstance(a.cible, Membre) else "la fonction"
         etale = any(isinstance(arg, Etalement) for arg in a.arguments)
         if etale:
@@ -995,7 +1190,7 @@ class Verificateur:
         for i, (arg, t) in enumerate(zip(a.arguments, types), 1):
             tp = tc.parametres[i - 1] if i <= n_fixes else t_reste
             if not compatible(t, tp):
-                raise self.erreur(f"argument {i} de '{nom}' : {tp} attendu, mais {t} fourni", arg)
+                raise self.erreur(f"argument {i} de '{nom}' : {tp} attendu, mais {t} fourni{self.aide_optionnel(t)}", arg)
             verifs.append(t == QUELCONQUE and tp != QUELCONQUE)
         a.verifs_runtime = tuple(verifs)  # type: ignore[attr-defined]
         return tc.retour
