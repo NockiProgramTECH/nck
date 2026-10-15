@@ -177,5 +177,7 @@ Historique détaillé : [CHANGELOG.md](CHANGELOG.md). Licence MIT.
 - [x] v0.10 — fonctions anonymes `fonction(x): x * 2`, `appliquer`/`filtrer`/`reduire`…, types optionnels `texte?` + `??`, plages `a..b`
 - [x] v0.11 — notation méthode `liste.ajouter(x)`, énumérations, `si … alors … sinon` en expression, affectation multiple, textes `"""…"""`
 - [x] v0.12 — installateur sans Python : `NCK-Setup.exe` (Windows), `installer.sh` (Linux/macOS), releases automatiques, `nck info`
-- [ ] v0.13 — paquets `nck installer`, v0.14 — interface graphique
-- [ ] réécriture du moteur en C
+- [ ] v0.13 — paquets `nck installer` · v0.14 — interface graphique · v0.15 — tests/formateur/doc · v0.16 — génériques, tuples, unions · … · v1.0
+- [ ] réécriture du moteur en C (reportée)
+
+Détail complet de ce qui reste : [`docs/ROADMAP.md`](docs/ROADMAP.md).
