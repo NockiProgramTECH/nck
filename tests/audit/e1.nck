@@ -1,0 +1,8 @@
+depuis "personnes.nck" importer Personne
+fonction saluer(p: Personne) -> texte:
+    retourner p.nom
+fin
+classe Etudiant herite Personne:
+    ecole: texte
+fin
+ecrire(saluer(Etudiant("Awa", "ISGE")))

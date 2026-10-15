@@ -158,6 +158,8 @@ pip install -e ".[dev]"
 pytest
 ```
 
+Historique détaillé : [CHANGELOG.md](CHANGELOG.md). Licence MIT.
+
 ## Feuille de route
 
 - [x] v0.1 — moteur Python : lexeur, parseur, vérificateur de types, interpréteur, REPL

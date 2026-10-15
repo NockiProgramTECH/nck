@@ -285,7 +285,12 @@ class Parseur:
             while self.est_op(","):
                 self.avancer()
                 params.append(self.type_annot())
-            self.attendre_op(">")
+            if self.est_op(">="):          # `liste<entier>= [1]` : '>=' collé (E8) → on scinde en '>' puis '='
+                j2 = self.courant()
+                j2.valeur = "="
+                j2.colonne += 1
+            else:
+                self.attendre_op(">")
         t = TypeAnnot(j.valeur, params, ligne=j.ligne, colonne=j.colonne)
         while self.est_op("?"):
             q = self.avancer()

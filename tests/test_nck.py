@@ -853,3 +853,81 @@ def test_conditionnelle_types():
 def test_destructuration_taille():
     with pytest.raises(ErreurExecution, match="3 élément"):
         run("variable a, b = [1, 2, 3]\n")
+
+
+# ---------- régressions de l'audit (E1–E9) ----------
+
+
+def test_e1_classe_importee_comme_type_et_parent():
+    import subprocess, sys
+    r = subprocess.run([sys.executable, "-m", "nck", str(RACINE / "tests" / "audit" / "e1.nck")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "Awa\n"
+
+
+def test_e2_fermeture_dans_boucle():
+    src = "variable fs: liste<fonction<entier>> = []\npour i dans 1..4:\n    ajouter(fs, fonction(): i)\nfin\nchaque(fs, fonction(f): ecrire(f()))\n"
+    assert run(src) == "1\n2\n3\n"
+    src2 = "variable fs: liste<fonction<entier>> = []\nvariable i = 0\ntantque i < 3:\n    variable j = i\n    fs.ajouter(fonction(): j)\n    i += 1\nfin\necrire(fs.appliquer(fonction(f): f()))\n"
+    assert run(src2) == "[0, 1, 2]\n"
+
+
+def test_e3_affinement_invalide_par_affectation():
+    with pytest.raises(ErreurType, match="texte\\?"):
+        run("variable p: texte? = \"a\"\nsi p != nul:\n    p = nul\n    ecrire(longueur(p))\nfin\n")
+    with pytest.raises(ErreurType, match="texte\\?"):
+        run("variable p: texte? = \"a\"\nsi p != nul:\n    variable f = fonction(): p.longueur()\nfin\n")
+
+
+def test_e4_grand_entier_affichable():
+    out = run("variable r = 1\npour i dans 1..2001:\n    r *= i\nfin\necrire(longueur(texte(r)))\n")
+    assert out == "5736\n"
+
+
+def test_e5_caractere_exotique_et_overflow():
+    from nck import ErreurLexicale
+    with pytest.raises(ErreurLexicale):
+        run("ecrire(²)\n")
+    import subprocess, sys, tempfile, os
+    with tempfile.NamedTemporaryFile("w", suffix=".nck", delete=False, encoding="utf-8") as f:
+        f.write("ecrire(puissance(10.0, 10000))\n")
+    try:
+        r = subprocess.run([sys.executable, "-m", "nck", f.name], capture_output=True, text=True)
+    finally:
+        os.unlink(f.name)
+    assert r.returncode == 2 and "trop grand" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_e6_recursion_attrapable_deux_fois():
+    src = ("fonction f(n: entier) -> entier:\n    retourner f(n + 1)\nfin\n"
+           "essayer:\n    f(0)\nattraper e:\n    ecrire(e.message)\nfin\n" * 1)
+    src = src.split("essayer")[0] + ("essayer:\n    f(0)\nattraper e:\n    ecrire(e.message)\nfin\n" * 2)
+    out = run(src)
+    assert out.count("récursion trop profonde") == 2
+
+
+def test_e7_decorateur_declare_apres():
+    src = ("@deco\nfonction add(a: entier, b: entier) -> entier:\n    retourner a + b\nfin\n"
+           "fonction deco(f: fonction<entier, entier, entier>) -> fonction<entier, entier, entier>:\n    retourner f\nfin\necrire(add(1, 2))\n")
+    assert run(src) == "3\n"
+
+
+def test_e8_chevron_colle_au_egal():
+    assert run("variable a: liste<entier>= [1]\necrire(a)\n") == "[1]\n"
+
+
+def test_e9_divers():
+    with pytest.raises(ErreurExecution, match="booleen"):
+        run("variable q: quelconque = []\nsi q:\n    ecrire(1)\nfin\n")
+    assert run("variable a: quelconque = vrai\nvariable b: quelconque = 1\necrire(a == b)\n") == "faux\n"
+    from nck import ErreurLexicale
+    with pytest.raises(ErreurLexicale, match="échappement inconnu"):
+        run('ecrire("a\\qb")\n')
+    assert run('ecrire("\\u00e9")\n') == "é\n"
+    assert run("fonction g() -> entier:\n    tantque vrai:\n        retourner 1\n    fin\nfin\necrire(g())\n") == "1\n"
+
+
+def test_version_unique():
+    import nck, tomllib
+    data = tomllib.loads((RACINE / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "version" in data["project"].get("dynamic", []) and nck.__version__.count(".") == 2

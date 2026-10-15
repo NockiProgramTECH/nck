@@ -30,7 +30,21 @@ class Jeton:
         return f"Jeton({self.genre}, {self.valeur!r}, {self.ligne}:{self.colonne})"
 
 
-ECHAPPEMENTS = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'", "0": "\0"}
+ECHAPPEMENTS = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'", "0": "\0", "{": "{", "}": "}"}
+
+
+def _echapper(source: str, i: int, ligne: int, colonne: int, fichier: str) -> tuple[str, int]:
+    """`source[i]` est le caractère après '\\'. Retourne (texte, nouvel index)."""
+    e = source[i]
+    if e in ECHAPPEMENTS:
+        return ECHAPPEMENTS[e], i + 1
+    if e == "u":
+        hexa = source[i + 1:i + 5]
+        if len(hexa) == 4 and all(h in "0123456789abcdefABCDEF" for h in hexa):
+            return chr(int(hexa, 16)), i + 5
+        raise ErreurLexicale("'\\u' doit être suivi de 4 chiffres hexadécimaux (ex : \\u00e9 pour é)", ligne, colonne, fichier)
+    raise ErreurLexicale(f"échappement inconnu '\\{e}' (connus : \\n \\t \\r \\\\ \\\" \\' \\0 \\uXXXX ; pour un '\\' seul écrivez '\\\\')",
+                         ligne, colonne, fichier)
 
 
 def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
@@ -76,25 +90,25 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
             continue
 
         # Nombres
-        if c.isdigit():
+        if c in "0123456789":
             l0, c0 = ligne, col()
             j = i
-            while j < n and (source[j].isdigit() or source[j] == "_"):
+            while j < n and (source[j] in "0123456789" or source[j] == "_"):
                 j += 1
             est_reel = False
-            if j < n and source[j] == "." and j + 1 < n and source[j + 1].isdigit():
+            if j < n and source[j] == "." and j + 1 < n and source[j + 1] in "0123456789":
                 est_reel = True
                 j += 1
-                while j < n and (source[j].isdigit() or source[j] == "_"):
+                while j < n and (source[j] in "0123456789" or source[j] == "_"):
                     j += 1
             if j < n and source[j] in "eE":
                 k = j + 1
                 if k < n and source[k] in "+-":
                     k += 1
-                if k < n and source[k].isdigit():
+                if k < n and source[k] in "0123456789":
                     est_reel = True
                     j = k
-                    while j < n and source[j].isdigit():
+                    while j < n and source[j] in "0123456789":
                         j += 1
             brut = source[i:j].replace("_", "")
             jetons.append(Jeton("nombre", float(brut) if est_reel else int(brut), l0, c0))
@@ -119,8 +133,8 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
                     i += 1
                     if i >= n:
                         raise ErreurLexicale("texte formaté non fermé", l0, c0, fichier)
-                    courant.append(ECHAPPEMENTS.get(source[i], "\\" + source[i]))
-                    i += 1
+                    texte_e, i = _echapper(source, i, ligne, col() - 1, fichier)
+                    courant.append(texte_e)
                     continue
                 if ch == "{":
                     if source.startswith("{{", i):
@@ -196,8 +210,8 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
                     break
                 ch = source[i]
                 if ch == "\\" and i + 1 < n:
-                    morceaux.append(ECHAPPEMENTS.get(source[i + 1], "\\" + source[i + 1]))
-                    i += 2
+                    texte_e, i = _echapper(source, i + 1, ligne, col(), fichier)
+                    morceaux.append(texte_e)
                     continue
                 if ch == "\n":
                     ligne += 1
@@ -229,9 +243,8 @@ def lexer(source: str, fichier: str = "<entrée>") -> list[Jeton]:
                     i += 1
                     if i >= n:
                         raise ErreurLexicale("chaîne de caractères non fermée", l0, c0, fichier)
-                    e = source[i]
-                    morceaux.append(ECHAPPEMENTS.get(e, "\\" + e))
-                    i += 1
+                    texte_e, i = _echapper(source, i, ligne, col() - 1, fichier)
+                    morceaux.append(texte_e)
                     continue
                 morceaux.append(ch)
                 i += 1

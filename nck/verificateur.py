@@ -208,9 +208,14 @@ class Verificateur:
     # ----- programme -----
 
     def verifier_programme(self, prog: Programme) -> None:
+        # Les imports sont traités en premier : une classe importée peut servir de type ou de parent (E1).
+        for instr in prog.instructions:
+            if isinstance(instr, Importer):
+                self.instruction(instr)
         self.pre_declarer_fonctions(prog.instructions)
         for instr in prog.instructions:
-            self.instruction(instr)
+            if not isinstance(instr, Importer):
+                self.instruction(instr)
 
     def pre_declarer_fonctions(self, instructions: list[Instr]) -> None:
         """Les fonctions et classes sont visibles dans tout leur bloc, même avant leur définition."""
@@ -544,6 +549,7 @@ class Verificateur:
                 raise self.erreur(f"'{a.cible.nom}' est une constante : impossible de la modifier", a.cible)
             t_cible = sym.type_declare or sym.type
             a.cible.type = t_cible  # type: ignore[attr-defined]
+            sym_affine = sym if sym.type_declare is not None else None
             if a.op != "=" and not sym.initialisee:
                 raise self.erreur(f"'{a.cible.nom}' est utilisée avant d'avoir reçu une valeur", a.cible)
             sym.initialisee = True
@@ -569,6 +575,8 @@ class Verificateur:
             raise self.erreur("affectation d'une valeur de type 'rien'", a.valeur)
         if not compatible(t_res, t_cible):
             raise self.erreur(f"impossible d'affecter un {t_res} à une cible de type {t_cible}{self.aide_optionnel(t_res)}", a.valeur)
+        if isinstance(a.cible, Identifiant) and sym_affine is not None and not compatible(t_res, sym_affine.type):
+            sym_affine.type = sym_affine.type_declare   # l'affinement T? -> T ne tient plus (E3)
         a.verif_runtime = (t_res == QUELCONQUE and t_cible != QUELCONQUE)  # type: ignore[attr-defined]
         a.type = t_cible  # type: ignore[attr-defined]
         return False
@@ -611,6 +619,9 @@ class Verificateur:
         self.profondeur_boucle += 1
         self.bloc(t.corps, si_vrai)
         self.profondeur_boucle -= 1
+        # `tantque vrai:` sans 'arreter' ne rend jamais la main : ce qui suit est inatteignable
+        if isinstance(t.condition, Litteral) and t.condition.valeur is True and not _contient_arret(t.corps):
+            return True
         return False
 
     def i_Pour(self, p: Pour) -> bool:
@@ -986,6 +997,10 @@ class Verificateur:
 
     def e_Identifiant(self, i: Identifiant) -> Type:
         sym = self.portee.chercher(i.nom)
+        if sym is not None and sym.type_declare is not None and not self.portee.visible_dans_fonction(i.nom):
+            # depuis une fermeture, la variable peut avoir changé : on revient au type déclaré (E3)
+            self.enregistrer(i, i.nom, sym)
+            return sym.type_declare
         if sym is None:
             if i.nom == "parent":
                 raise self.erreur("'parent' ne s'utilise que dans une méthode d'une classe qui 'herite' d'une autre", i)
@@ -1365,3 +1380,20 @@ class Verificateur:
 
 def verifier(prog: Programme, fichier: str = "<entrée>") -> None:
     Verificateur(fichier).verifier_programme(prog)
+
+
+def _contient_arret(bloc) -> bool:
+    """Le bloc contient-il un 'arreter' s'appliquant à la boucle courante (hors boucles et fonctions imbriquées) ?"""
+    import dataclasses
+
+    def visiter(n) -> bool:
+        if isinstance(n, Arreter):
+            return True
+        if isinstance(n, (TantQue, Pour, DeclFonction, FonctionAnonyme, DeclClasse)):
+            return False
+        if isinstance(n, list):
+            return any(visiter(x) for x in n)
+        if dataclasses.is_dataclass(n) and not isinstance(n, type):
+            return any(visiter(getattr(n, f.name)) for f in dataclasses.fields(n))
+        return False
+    return visiter(bloc.instructions)

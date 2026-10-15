@@ -33,6 +33,28 @@ def afficher_erreur(e: ErreurNck, source: str, chemin: str | None = None) -> Non
     print(e.formater(source), file=sys.stderr)
 
 
+def erreur_interne(exc: BaseException) -> int:
+    """Une exception Python inattendue : message NCK propre, trace complète seulement avec NCK_DEBUG=1."""
+    import traceback
+    if os.environ.get("NCK_DEBUG"):
+        traceback.print_exc()
+    nom = type(exc).__name__
+    detail = str(exc)
+    if isinstance(exc, OverflowError):
+        msg = "nombre trop grand pour un reel (dépassement de capacité)"
+    elif isinstance(exc, MemoryError):
+        msg = "mémoire insuffisante"
+    elif isinstance(exc, RecursionError):
+        msg = "récursion trop profonde (pile épuisée)"
+    else:
+        msg = f"erreur interne de NCK ({nom}{' : ' + detail if detail else ''})"
+    print(f"Erreur : {msg}", file=sys.stderr)
+    if not isinstance(exc, (OverflowError, MemoryError, RecursionError)):
+        print("  Ceci est un bogue de NCK, pas de votre programme. Relancez avec NCK_DEBUG=1 pour la trace complète.",
+              file=sys.stderr)
+    return 2
+
+
 def commande_executer(chemin: str) -> int:
     source = lire_fichier(chemin)
     try:
@@ -45,6 +67,8 @@ def commande_executer(chemin: str) -> int:
         return 130
     except SystemExit as e:
         return int(e.code or 0)
+    except Exception as exc:  # noqa: BLE001
+        return erreur_interne(exc)
     return 0
 
 

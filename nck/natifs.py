@@ -16,6 +16,13 @@ from .types_nck import (
 
 # ---------- représentation des valeurs ----------
 
+def egal_nck(a, b) -> bool:
+    """Égalité NCK : `vrai == 1` est faux (contrairement à Python), le reste suit Python."""
+    if isinstance(a, bool) != isinstance(b, bool):
+        return False
+    return a == b
+
+
 def vers_texte(v: object) -> str:
     if v is None:
         return "nul"
@@ -154,9 +161,6 @@ class ParentNck:
         self.objet = objet
         self.classe = classe
 
-    def __call__(self, *args, **kwargs):
-        return self.construire(*args, **kwargs)
-
 
 class ObjetNck:
     """Instance d'une classe NCK. Les opérateurs délèguent aux méthodes spéciales si elles existent."""
@@ -222,7 +226,10 @@ class ObjetNck:
         return self._op("modulo", autre)
 
     def __neg__(self):
-        return self._op("oppose", None) if "oppose" in self.classe.methodes else self._op("oppose", None)
+        m = self._methode("oppose")
+        if m is None:
+            raise ErreurExecution(f"la classe '{self.classe.nom}' ne définit pas la méthode 'oppose' : '-' impossible")
+        return m(self)
 
 
 OPERATEURS_CLASSE = {"+": "plus", "-": "moins", "*": "fois", "/": "divise", "%": "modulo",

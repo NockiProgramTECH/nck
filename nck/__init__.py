@@ -6,6 +6,12 @@ Utilisation rapide :
     executer_source('ecrire("Bonjour !")')
 """
 
+import sys as _sys
+
+# Les entiers NCK sont illimités : on lève la limite d'affichage de Python (4300 chiffres par défaut).
+if hasattr(_sys, "set_int_max_str_digits"):
+    _sys.set_int_max_str_digits(0)
+
 from .erreurs import ErreurExecution, ErreurLexicale, ErreurNck, ErreurSyntaxe, ErreurType
 from .interpreteur import Interpreteur
 from .lexeur import lexer
@@ -13,7 +19,7 @@ from .parseur import parser
 from .modules import Chargeur
 from .verificateur import Verificateur, verifier
 
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 __all__ = [
     "__version__", "executer_source", "compiler_source", "lexer", "parser", "verifier", "Interpreteur",
     "ErreurNck", "ErreurLexicale", "ErreurSyntaxe", "ErreurType", "ErreurExecution",

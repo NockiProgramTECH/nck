@@ -14,8 +14,8 @@ from .arbre import (
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .modules import Chargeur
-from .natifs import NATIFS, OPERATEURS_CLASSE, ClasseNck, EnumNck, FonctionNck, ModuleNck, ObjetNck, ParentNck, ValeurEnum, nom_type_valeur, vers_texte
-from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, TypeClasse, est_dico, est_liste, valeur_compatible
+from .natifs import NATIFS, OPERATEURS_CLASSE, egal_nck, ClasseNck, EnumNck, FonctionNck, ModuleNck, ObjetNck, ParentNck, ValeurEnum, nom_type_valeur, vers_texte
+from .types_nck import BOOLEEN, ENTIER, QUELCONQUE, TEXTE, Type, TypeClasse, est_dico, est_liste, valeur_compatible
 
 
 def _repr_cle(k) -> str:
@@ -102,6 +102,7 @@ class Interpreteur:
                  chargeur: Chargeur | None = None, base_env: "Env | None" = None):
         self.fichier = fichier
         self.limite_recursion = limite_recursion
+        self.profondeur = [0]           # nombre d'appels NCK imbriqués (toutes fonctions confondues)
         self.chargeur = chargeur if chargeur is not None else Chargeur()
         if base_env is None:
             # Environnement de base partagé par le programme principal et tous les modules : natifs + Erreur
@@ -121,7 +122,7 @@ class Interpreteur:
     def executer(self, prog: Programme) -> None:
         corps = self.compiler_instructions(prog.instructions)
         ancienne_limite = sys.getrecursionlimit()
-        sys.setrecursionlimit(max(ancienne_limite, self.limite_recursion * 6))
+        sys.setrecursionlimit(max(ancienne_limite, self.limite_recursion * 12 + 500))
         try:
             corps(self.global_env)
         except Levee as l:
@@ -140,9 +141,17 @@ class Interpreteur:
     def compiler_instructions(self, instructions: list[Instr]) -> Fn:
         # Les fonctions sont « hissées » : elles existent dès le début de leur bloc,
         # ce qui permet de les appeler avant leur définition (comme l'autorise le vérificateur).
-        ordonnees = ([i for i in instructions if isinstance(i, DeclClasse)]
-                     + [i for i in instructions if isinstance(i, DeclFonction)]
-                     + [i for i in instructions if not isinstance(i, (DeclFonction, DeclClasse))])
+        def rang(i):
+            if isinstance(i, Importer):
+                return 0
+            if isinstance(i, DeclEnum):
+                return 1
+            if isinstance(i, DeclClasse):
+                return 2
+            if isinstance(i, DeclFonction):
+                return 4 if getattr(i, "decorateurs", None) else 3   # décorées après (le décorateur doit exister)
+            return 5
+        ordonnees = sorted(instructions, key=rang)   # tri stable : l'ordre relatif est conservé
         fns = [self.instruction(i) for i in ordonnees]
         if len(fns) == 1:
             return fns[0]
@@ -284,8 +293,22 @@ class Interpreteur:
     def i_Bloc(self, b: Bloc) -> Fn:
         return self.compiler_instructions(b.instructions)
 
+    def _condition(self, e, mot: str):
+        """Compile une condition ; si son type statique est 'quelconque', exige un booleen à l'exécution."""
+        cond = self.expression(e)
+        if getattr(e, "type", None) != QUELCONQUE:
+            return cond
+        erreur = self.erreur
+
+        def cond_verifiee(env):
+            v = cond(env)
+            if not isinstance(v, bool):
+                raise erreur(f"la condition de '{mot}' doit être un booleen, mais c'est un {nom_type_valeur(v)}", e)
+            return v
+        return cond_verifiee
+
     def i_Si(self, s: Si) -> Fn:
-        cond = self.expression(s.condition)
+        cond = self._condition(s.condition, "si")
         alors = self.compiler_instructions(s.alors.instructions)
         if s.sinon is None:
             def si(env):
@@ -302,8 +325,11 @@ class Interpreteur:
         return si_sinon
 
     def i_TantQue(self, t: TantQue) -> Fn:
-        cond = self.expression(t.condition)
+        cond = self._condition(t.condition, "tantque")
         corps = self.compiler_instructions(t.corps.instructions)
+        if _cree_fermeture(t.corps):
+            corps0 = corps
+            corps = lambda env: corps0(Env(env))   # noqa: E731  (un environnement par itération)
         utilise_controle = _contient_controle(t.corps)
         if not utilise_controle:
             def tantque(env):
@@ -329,6 +355,7 @@ class Interpreteur:
         noeud = p.iterable
 
         nom2 = p.variable2
+        fermeture = _cree_fermeture(p.corps)   # chaque itération a alors sa propre variable (E2)
 
         def obtenir(env):
             it = iterable(env)
@@ -340,19 +367,21 @@ class Interpreteur:
                 it = range(it)
             return enumerate(it) if nom2 is not None else it
 
-        if nom2 is not None:
-            def pour2(env):
-                vars_ = env.vars
-                for v1, v2 in obtenir(env):
-                    vars_[nom] = v1
-                    vars_[nom2] = v2
+        if nom2 is not None or fermeture:
+            def pour_general(env):
+                for v in obtenir(env):
+                    e = Env(env) if fermeture else env
+                    if nom2 is not None:
+                        e.vars[nom], e.vars[nom2] = v
+                    else:
+                        e.vars[nom] = v
                     try:
-                        corps(env)
+                        corps(e)
                     except _Continue:
                         continue
                     except _Arret:
                         break
-            return pour2
+            return pour_general
 
         if not utilise_controle:
             def pour(env):
@@ -532,7 +561,7 @@ class Interpreteur:
         return aff_index
 
     def e_Conditionnelle(self, c: Conditionnelle) -> Fn:
-        cond, alors, sinon = self.expression(c.condition), self.expression(c.alors), self.expression(c.sinon)
+        cond, alors, sinon = self._condition(c.condition, "si"), self.expression(c.alors), self.expression(c.sinon)
         return lambda env: alors(env) if cond(env) else sinon(env)
 
     def i_DeclFonction(self, f: DeclFonction) -> Fn:
@@ -576,7 +605,7 @@ class Interpreteur:
         nom = f.nom
         a_retour = _contient_retour(f.corps)
         limite = self.limite_recursion
-        profondeur = [0]
+        profondeur = self.profondeur   # compteur global à l'interpréteur (E6)
         decorateurs = [self.expression(d) for d in reversed(getattr(f, "decorateurs", []))]
         noeud_f = f
 
@@ -599,10 +628,9 @@ class Interpreteur:
                         env.vars[pn] = pd(env_def)
                 if a_parent:
                     env.vars["parent"] = ParentNck(args[0], classe.parent)
-                profondeur[0] += 1
-                if profondeur[0] > limite:
-                    profondeur[0] = 0
+                if profondeur[0] >= limite:
                     raise self.erreur(f"récursion trop profonde dans '{nom}' (plus de {limite} appels imbriqués)", f)
+                profondeur[0] += 1
                 try:
                     if a_retour:
                         try:
@@ -612,6 +640,8 @@ class Interpreteur:
                         return None
                     corps(env)
                     return None
+                except RecursionError:
+                    raise self.erreur(f"récursion trop profonde dans '{nom}' (pile épuisée)", f) from None
                 finally:
                     profondeur[0] -= 1
             fn = FonctionNck(nom, -1 if variadique else len(noms), appeler)
@@ -848,10 +878,11 @@ class Interpreteur:
             return lambda env: g(env) > d(env)
         if op == ">=" and tg == ENTIER and td == ENTIER:
             return lambda env: g(env) >= d(env)
+        surs = (tg != QUELCONQUE and td != QUELCONQUE and tg != BOOLEEN and td != BOOLEEN)
         if op == "==":
-            return lambda env: g(env) == d(env)
+            return (lambda env: g(env) == d(env)) if surs else (lambda env: egal_nck(g(env), d(env)))
         if op == "!=":
-            return lambda env: g(env) != d(env)
+            return (lambda env: g(env) != d(env)) if surs else (lambda env: not egal_nck(g(env), d(env)))
         if op == "+" and tg == TEXTE and td == TEXTE:
             return lambda env: g(env) + d(env)
         fn = self.operateur_binaire(op, b, tg, td)
@@ -870,9 +901,9 @@ class Interpreteur:
             return m
 
         if op == "==":
-            return lambda a, b: a == b
+            return egal_nck
         if op == "!=":
-            return lambda a, b: a != b
+            return lambda a, b: not egal_nck(a, b)
         if op == "<":
             return lambda a, b: bool(methode(a, "inferieur")(a, b))
         if op == ">":
@@ -1192,6 +1223,20 @@ class Interpreteur:
 
 
 # ---------- analyses auxiliaires ----------
+
+def _cree_fermeture(bloc: Bloc) -> bool:
+    """Le bloc contient-il une fonction (anonyme ou déclarée) qui pourrait capturer les variables de l'itération ?"""
+    import dataclasses
+
+    def visiter(n) -> bool:
+        if isinstance(n, (FonctionAnonyme, DeclFonction, DeclClasse)):
+            return True
+        if isinstance(n, list):
+            return any(visiter(x) for x in n)
+        if dataclasses.is_dataclass(n) and not isinstance(n, type):
+            return any(visiter(getattr(n, f.name)) for f in dataclasses.fields(n))
+        return False
+    return visiter(bloc.instructions)
 
 def _contient_controle(bloc: Bloc) -> bool:
     """Le bloc contient-il arreter/continuer (hors boucles et fonctions imbriquées) ?"""
