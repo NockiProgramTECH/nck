@@ -9,13 +9,13 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .modules import Chargeur
-from .natifs import NATIFS, ClasseNck, FonctionNck, ModuleNck, ObjetNck, nom_type_valeur, vers_texte
-from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, est_dico, est_liste, valeur_compatible
+from .natifs import NATIFS, OPERATEURS_CLASSE, ClasseNck, FonctionNck, ModuleNck, ObjetNck, ParentNck, nom_type_valeur, vers_texte
+from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, TypeClasse, est_dico, est_liste, valeur_compatible
 
 
 def _repr_cle(k) -> str:
@@ -380,29 +380,43 @@ class Interpreteur:
         parent_nom = c.parent
         defauts = {ch.nom: self.expression(ch.defaut) for ch in c.champs if ch.defaut is not None}
         types_champs = {ch.nom: ch.type for ch in c.champs}  # type: ignore[attr-defined]
-        fabriques = {m.nom: self.fabrique_fonction(m, methode=True) for m in c.methodes}
+        fabriques = {m.nom: self.fabrique_fonction(m, methode=True)
+                     for m in c.methodes if m.corps is not None and not getattr(m, "statique", False)}
+        statiques = {m.nom: self.fabrique_fonction(m) for m in c.methodes if getattr(m, "statique", False)}
+        constantes = [(cst.nom, self.expression(cst.valeur)) for cst in getattr(c, "constantes", [])]
+        abstraites = set(info.abstraites)
         erreur = self.erreur
 
         def decl(env):
             classe = ClasseNck(nom, info.type.ancetres)
             if parent_nom is not None:
                 parent: ClasseNck = env.chercher(parent_nom)
+                classe.parent = parent
                 classe.champs = list(parent.champs)
                 classe.types_champs = dict(parent.types_champs)
                 classe.defauts = dict(parent.defauts)
                 classe.methodes = dict(parent.methodes)
+                classe.statiques = dict(parent.statiques)
+                classe.constantes = dict(parent.constantes)
+            classe.abstraites = abstraites
             classe.champs += [ch.nom for ch in c.champs]
             classe.types_champs.update(types_champs)
             for k, f in defauts.items():
                 classe.defauts[k] = (lambda f=f: f(env))
+            for k, f in constantes:
+                classe.constantes[k] = f(env)
             for k, fab in fabriques.items():
-                classe.methodes[k] = fab(env).appeler
+                classe.methodes[k] = self._appelable(fab(env, classe), k, c)
+            for k, fab in statiques.items():
+                classe.statiques[k] = fab(env, classe)
             champs = classe.champs
             tchamps = classe.types_champs
             dflt = classe.defauts
             valider = classe.methodes.get("valider")
 
             def construire(*args, **nommes):
+                if abstraites:
+                    raise ErreurExecution(f"'{nom}' est abstraite (méthodes non implémentées : {', '.join(sorted(abstraites))})")
                 valeurs = dict(zip(champs, args))
                 valeurs.update(nommes)
                 obj = {}
@@ -434,26 +448,48 @@ class Interpreteur:
             env.vars[nom] = fabriquer(env)
         return decl
 
+    @staticmethod
+    def _appelable(v, nom: str, noeud):
+        """Transforme une valeur (FonctionNck ou callable) en callable Python pour les méthodes."""
+        if isinstance(v, FonctionNck):
+            return v.appeler
+        return v
+
     def fabrique_fonction(self, f: DeclFonction, methode: bool = False):
-        """Retourne `fabriquer(env_def) -> FonctionNck`. Une méthode reçoit l'objet (`soi`) en premier argument."""
+        """Retourne `fabriquer(env_def, classe=None) -> FonctionNck`. Une méthode reçoit l'objet (`soi`) en premier argument.
+        Les décorateurs (`@deco`) sont appliqués à la définition : `f = deco(f)`."""
         corps = self.compiler_instructions(f.corps.instructions)
+        variadique = bool(f.parametres) and f.parametres[-1].variadique
         noms = (["soi"] if methode else []) + [p.nom for p in f.parametres]
         defauts = [(p.nom, self.expression(p.defaut)) for p in f.parametres if p.defaut is not None]
-        minimum = len(noms) - len(defauts)
+        n_fixes = len(noms) - (1 if variadique else 0)
+        minimum = n_fixes - len(defauts)
         nom = f.nom
         a_retour = _contient_retour(f.corps)
         limite = self.limite_recursion
         profondeur = [0]
+        decorateurs = [self.expression(d) for d in reversed(getattr(f, "decorateurs", []))]
+        noeud_f = f
 
-        def fabriquer(env_def: Env) -> FonctionNck:
+        def fabriquer(env_def: Env, classe: ClasseNck | None = None) -> FonctionNck:
+            a_parent = methode and classe is not None and classe.parent is not None
+
             def appeler(*args):
                 env = Env(env_def)
-                env.vars.update(zip(noms, args))
-                if len(args) < len(noms):
+                if variadique:
+                    env.vars.update(zip(noms, args))
+                    env.vars[noms[-1]] = list(args[n_fixes:])
+                else:
+                    env.vars.update(zip(noms, args))
+                    if len(args) > len(noms):
+                        raise self.erreur(f"'{nom}' attend au plus {len(noms) - (1 if methode else 0)} argument(s), mais {len(args) - (1 if methode else 0)} fourni(s)", f)
+                if len(args) < n_fixes:
                     if len(args) < minimum:
                         raise self.erreur(f"'{nom}' attend au moins {minimum - (1 if methode else 0)} argument(s), mais {len(args) - (1 if methode else 0)} fourni(s)", f)
                     for pn, pd in defauts[len(args) - minimum:]:
                         env.vars[pn] = pd(env_def)
+                if a_parent:
+                    env.vars["parent"] = ParentNck(args[0], classe.parent)
                 profondeur[0] += 1
                 if profondeur[0] > limite:
                     profondeur[0] = 0
@@ -469,8 +505,18 @@ class Interpreteur:
                     return None
                 finally:
                     profondeur[0] -= 1
-            fn = FonctionNck(nom, len(noms), appeler)
+            fn = FonctionNck(nom, -1 if variadique else len(noms), appeler)
             fn.arite_min = minimum
+            if decorateurs:
+                resultat = fn
+                for d in decorateurs:
+                    deco = d(env_def)
+                    resultat = self._appeler_valeur(deco, [resultat], noeud_f, "décorateur")
+                    if not (isinstance(resultat, FonctionNck) or callable(resultat)):
+                        raise self.erreur(f"le décorateur de '{nom}' doit retourner une fonction, mais a retourné un {nom_type_valeur(resultat)}", noeud_f)
+                if not isinstance(resultat, FonctionNck):
+                    resultat = FonctionNck(nom, -1, resultat)
+                return resultat
             return fn
 
         return fabriquer
@@ -661,6 +707,9 @@ class Interpreteur:
         tg = b.gauche.type  # type: ignore[attr-defined]
         td = b.droite.type  # type: ignore[attr-defined]
         op = b.op
+        if isinstance(tg, TypeClasse) or isinstance(td, TypeClasse):
+            fn = self.operateur_objet(op, b)
+            return lambda env: fn(g(env), d(env))
         # Chemins rapides quand les types sont connus statiquement.
         if op == "+" and tg == ENTIER and td == ENTIER:
             return lambda env: g(env) + d(env)
@@ -684,6 +733,37 @@ class Interpreteur:
             return lambda env: g(env) + d(env)
         fn = self.operateur_binaire(op, b, tg, td)
         return lambda env: fn(g(env), d(env))
+
+    def operateur_objet(self, op: str, noeud):
+        """`a + b` sur des objets : appelle `a.plus(b)` ; `a < b` : `a.inferieur(b)` ; `a == b` : `a.egal(b)`…"""
+        erreur = self.erreur
+        nom = OPERATEURS_CLASSE.get(op)
+        generique = self.operateur_binaire(op, noeud, QUELCONQUE, QUELCONQUE) if op not in ("==", "!=") else None
+
+        def methode(o, nom_m):
+            m = o.classe.methodes.get(nom_m) if isinstance(o, ObjetNck) else None
+            if m is None:
+                raise erreur(f"'{op}' n'est pas défini pour un {nom_type_valeur(o)} : ajoutez une méthode '{nom_m}' à la classe", noeud)
+            return m
+
+        if op == "==":
+            return lambda a, b: a == b
+        if op == "!=":
+            return lambda a, b: a != b
+        if op == "<":
+            return lambda a, b: bool(methode(a, "inferieur")(a, b))
+        if op == ">":
+            return lambda a, b: bool(methode(b, "inferieur")(b, a))
+        if op == "<=":
+            return lambda a, b: bool(methode(a, "inferieur")(a, b)) or a == b
+        if op == ">=":
+            return lambda a, b: bool(methode(b, "inferieur")(b, a)) or a == b
+
+        def operation(a, b):
+            if isinstance(a, ObjetNck):
+                return methode(a, nom)(a, b)
+            return generique(a, b)
+        return operation
 
     def operateur_binaire(self, op: str, noeud, tg: Type, td: Type):
         """Opérateur binaire générique avec vérifications à l'exécution."""
@@ -796,11 +876,46 @@ class Interpreteur:
                     return o.env.vars[nom]
                 except KeyError:
                     raise erreur(f"le module '{o.nom}' ne définit pas '{nom}'", m) from None
+            if isinstance(o, ClasseNck):
+                if nom in o.statiques:
+                    return o.statiques[nom]
+                if nom in o.constantes:
+                    return o.constantes[nom]
+                raise erreur(f"la classe '{o.nom}' n'a pas de méthode statique ni de constante '{nom}'", m)
+            if isinstance(o, ParentNck):
+                meth = o.classe.methodes.get(nom)
+                if meth is not None:
+                    obj = o.objet
+                    return FonctionNck(f"{o.classe.nom}.{nom}", -1, lambda *args: meth(obj, *args))
+                if nom in o.objet.champs:
+                    return o.objet.champs[nom]
+                raise erreur(f"la classe parente '{o.classe.nom}' n'a pas de champ ni de méthode '{nom}'", m)
             raise erreur(f"un {nom_type_valeur(o)} n'a pas de champ ni de méthode '{nom}'", m)
         return membre
 
+    def _compiler_arguments(self, arguments):
+        """Retourne (liste de fonctions par argument ou None si étalement, fonction env -> liste de valeurs)."""
+        if not any(isinstance(x, Etalement) for x in arguments):
+            args = [self.expression(x) for x in arguments]
+            return args, (lambda env: [g(env) for g in args])
+        parties = [(isinstance(x, Etalement), self.expression(x.valeur if isinstance(x, Etalement) else x)) for x in arguments]
+        erreur = self.erreur
+
+        def evaluer(env):
+            valeurs = []
+            for etale, g in parties:
+                v = g(env)
+                if etale:
+                    if not isinstance(v, list):
+                        raise erreur(f"'...' attend une liste, mais reçoit un {nom_type_valeur(v)}", arguments[0])
+                    valeurs.extend(v)
+                else:
+                    valeurs.append(v)
+            return valeurs
+        return None, evaluer
+
     def e_Appel(self, a: Appel) -> Fn:
-        args = [self.expression(x) for x in a.arguments]
+        args, evaluer_args = self._compiler_arguments(a.arguments)
         natif = a.natif  # type: ignore[attr-defined]
         erreur = self.erreur
 
@@ -830,16 +945,26 @@ class Interpreteur:
                 if isinstance(o, ObjetNck):
                     meth = o.classe.methodes.get(nom_m)
                     if meth is not None:
-                        return meth(o, *[g(env) for g in args])
+                        return meth(o, *evaluer_args(env))
                     f = o.champs.get(nom_m)
                     if f is not None:
-                        return self._appeler_valeur(f, [g(env) for g in args], a, nom_m)
+                        return self._appeler_valeur(f, evaluer_args(env), a, nom_m)
                     raise erreur(f"la classe '{o.classe.nom}' n'a pas de méthode '{nom_m}'", noeud_m)
                 if isinstance(o, ModuleNck):
                     f = o.env.vars.get(nom_m)
                     if f is None:
                         raise erreur(f"le module '{o.nom}' ne définit pas '{nom_m}'", noeud_m)
-                    return self._appeler_valeur(f, [g(env) for g in args], a, nom_m)
+                    return self._appeler_valeur(f, evaluer_args(env), a, nom_m)
+                if isinstance(o, ClasseNck):
+                    f = o.statiques.get(nom_m)
+                    if f is None:
+                        raise erreur(f"la classe '{o.nom}' n'a pas de méthode statique '{nom_m}'", noeud_m)
+                    return self._appeler_valeur(f, evaluer_args(env), a, nom_m)
+                if isinstance(o, ParentNck):
+                    meth = o.classe.methodes.get(nom_m)
+                    if meth is None:
+                        raise erreur(f"la classe parente '{o.classe.nom}' n'a pas de méthode '{nom_m}'", noeud_m)
+                    return meth(o.objet, *evaluer_args(env))
                 raise erreur(f"un {nom_type_valeur(o)} n'a pas de méthode '{nom_m}'", noeud_m)
             return appel_methode
 
@@ -889,7 +1014,7 @@ class Interpreteur:
         nom = a.cible.nom if isinstance(a.cible, Identifiant) else "fonction"
 
         def appel(env):
-            return self._appeler_valeur(cible(env), [g(env) for g in args], a, nom)
+            return self._appeler_valeur(cible(env), evaluer_args(env), a, nom)
         return appel
 
     def _appeler_valeur(self, f, valeurs: list, noeud, nom: str):

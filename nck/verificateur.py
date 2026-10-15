@@ -4,7 +4,7 @@ import os
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, Etalement, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
@@ -29,6 +29,9 @@ class InfoClasse:
         self.champs: dict[str, Type] = {}
         self.defauts: set[str] = set()
         self.methodes: dict[str, TypeFonction] = {}
+        self.statiques: dict[str, TypeFonction] = {}
+        self.constantes: dict[str, Type] = {}
+        self.abstraites: set[str] = set()
         self.descriptions: dict[str, str] = {}             # membre -> signature / description
         self.positions: dict[str, tuple[str, int, int]] = {}   # membre -> (fichier, ligne, colonne)
         self.prete = False
@@ -38,7 +41,8 @@ class InfoClasse:
         for n, t in self.champs.items():
             params.append(f"{n}: {t}" + (" = …" if n in self.defauts else ""))
         base = f"classe {self.nom}" + (f" herite {self.parent.nom}" if self.parent else "")
-        return f"{base}({', '.join(params)})"
+        suffixe = "  (abstraite)" if self.abstraites else ""
+        return f"{base}({', '.join(params)}){suffixe}"
 
 
 class Symbole:
@@ -235,18 +239,21 @@ class Verificateur:
     def signature_fonction(f: DeclFonction, t: TypeFonction, prefixe: str = "fonction ") -> str:
         params = []
         for p, tp in zip(f.parametres, t.parametres):
-            params.append(f"{p.nom}: {tp}" + (" = …" if p.defaut is not None else ""))
+            prefixe_p = "..." if p.variadique else ""
+            params.append(f"{prefixe_p}{p.nom}: {tp}" + (" = …" if p.defaut is not None else ""))
         retour = f" -> {t.retour}" if t.retour != RIEN else ""
         return f"{prefixe}{f.nom}({', '.join(params)}){retour}"
 
     def _type_fonction(self, f: DeclFonction) -> TypeFonction:
-        obligatoires = sum(1 for p in f.parametres if p.defaut is None)
-        return TypeFonction(
-            "fonction", (),
-            tuple(self.resoudre_type(p.type_annot) for p in f.parametres),
-            self.resoudre_type(f.type_retour),
-            obligatoires,
-        )
+        variadique = bool(f.parametres) and f.parametres[-1].variadique
+        obligatoires = sum(1 for p in f.parametres if p.defaut is None and not p.variadique)
+        params = []
+        for p in f.parametres:
+            t = self.resoudre_type(p.type_annot)
+            if p.variadique and not est_liste(t):
+                raise self.erreur(f"le paramètre '...{p.nom}' doit être une liste (ex : ...{p.nom}: liste<entier>), pas un {t}", p)
+            params.append(t)
+        return TypeFonction("fonction", (), tuple(params), self.resoudre_type(f.type_retour), obligatoires, variadique)
 
     def _signatures_classe(self, c: DeclClasse) -> None:
         info: InfoClasse = c.info  # type: ignore[attr-defined]
@@ -254,6 +261,13 @@ class Verificateur:
             info.champs = dict(info.parent.champs)
             info.defauts = set(info.parent.defauts)
             info.methodes = dict(info.parent.methodes)
+            info.statiques = dict(info.parent.statiques)
+            info.constantes = dict(info.parent.constantes)
+            info.abstraites = set(info.parent.abstraites)
+        for cst in getattr(c, "constantes", []):
+            if cst.nom in info.constantes:
+                raise self.erreur(f"la constante '{cst.nom}' est déjà définie dans la classe parente", cst)
+            info.constantes[cst.nom] = self.resoudre_type(cst.type_annot) if cst.type_annot else None  # type: ignore[assignment]
         for champ in c.champs:
             if champ.nom in info.champs:
                 origine = "la classe parente" if info.parent and champ.nom in info.parent.champs else "cette classe"
@@ -279,12 +293,29 @@ class Verificateur:
             t = self._type_fonction(m)
             if m.nom == "valider" and (t.parametres or t.retour != RIEN):
                 raise self.erreur("la méthode spéciale 'valider' ne prend aucun paramètre et ne retourne rien", m)
+            if getattr(m, "statique", False):
+                if getattr(m, "abstraite", False):
+                    raise self.erreur("une méthode ne peut pas être à la fois statique et abstraite", m)
+                if m.nom in info.methodes:
+                    raise self.erreur(f"'{m.nom}' est déjà une méthode d'objet dans la classe parente", m)
+                info.statiques[m.nom] = t
+                info.descriptions[m.nom] = self.signature_fonction(m, t, prefixe="statique ")
+                pos = getattr(m, "position_nom", (m.ligne, m.colonne))
+                info.positions[m.nom] = (self.fichier, pos[0], pos[1])
+                m.type = t  # type: ignore[attr-defined]
+                continue
+            if m.nom in info.statiques:
+                raise self.erreur(f"'{m.nom}' est déjà une méthode statique dans la classe parente", m)
+            if getattr(m, "abstraite", False):
+                info.abstraites.add(m.nom)
+            else:
+                info.abstraites.discard(m.nom)
             ancienne = info.methodes.get(m.nom)
             if ancienne is not None and not compatible(t, ancienne):
                 raise self.erreur(
                     f"la méthode '{m.nom}' ({t}) n'est pas compatible avec celle de la classe parente ({ancienne})", m)
             info.methodes[m.nom] = t
-            info.descriptions[m.nom] = self.signature_fonction(m, t, prefixe="méthode ")
+            info.descriptions[m.nom] = self.signature_fonction(m, t, prefixe="abstraite " if getattr(m, "abstraite", False) else "méthode ")
             pos = getattr(m, "position_nom", (m.ligne, m.colonne))
             info.positions[m.nom] = (self.fichier, pos[0], pos[1])
             m.type = t  # type: ignore[attr-defined]
@@ -303,12 +334,41 @@ class Verificateur:
                     raise self.erreur(
                         f"le champ '{champ.nom}' est de type {champ.type}, mais sa valeur par défaut est un {t}",  # type: ignore[attr-defined]
                         champ.defaut)
+        for cst in getattr(c, "constantes", []):
+            t = self.expression(cst.valeur)
+            attendu = info.constantes.get(cst.nom)
+            if attendu is None:
+                if t in (NUL, RIEN) or t == LISTE_VIDE:
+                    raise self.erreur(f"impossible de déduire le type de la constante '{cst.nom}' : précisez-le", cst)
+                info.constantes[cst.nom] = t
+            elif not compatible(t, attendu):
+                raise self.erreur(f"la constante '{cst.nom}' est de type {attendu}, mais reçoit un {t}", cst.valeur)
+            info.descriptions[cst.nom] = f"constante {info.nom}.{cst.nom}: {info.constantes[cst.nom]}"
+            info.positions[cst.nom] = (self.fichier, cst.ligne, cst.colonne)
         ancienne = self.classe_courante
         self.classe_courante = info.type
         for m in c.methodes:
-            self._verifier_fonction(m, soi=info.type)
+            self._verifier_decorateurs(m)
+            if getattr(m, "statique", False):
+                self._verifier_fonction(m, soi=None)
+            elif m.corps is not None:
+                self._verifier_fonction(m, soi=info.type, parent=info.parent.type if info.parent else None)
         self.classe_courante = ancienne
         return False
+
+    def _verifier_decorateurs(self, f: DeclFonction) -> None:
+        for d in getattr(f, "decorateurs", []):
+            td = self.expression(d)
+            if td == QUELCONQUE:
+                continue
+            if not isinstance(td, TypeFonction):
+                raise self.erreur(f"un décorateur doit être une fonction, mais '@' reçoit un {td}", d)
+            if td.minimum > 1 or (td.maximum is not None and td.maximum < 1):
+                raise self.erreur(f"un décorateur doit accepter exactement 1 argument (la fonction décorée), mais celui-ci : {td}", d)
+            if td.retour == RIEN:
+                raise self.erreur("un décorateur doit retourner une fonction (celle qui remplacera la fonction décorée)", d)
+            if td.retour != QUELCONQUE and not isinstance(td.retour, TypeFonction):
+                raise self.erreur(f"un décorateur doit retourner une fonction, mais celui-ci retourne un {td.retour}", d)
 
     def bloc(self, bloc: Bloc) -> bool:
         """Vérifie un bloc. Retourne True si le bloc termine toujours (retourner/arreter/continuer)."""
@@ -460,9 +520,13 @@ class Verificateur:
     def i_DeclFonction(self, f: DeclFonction) -> bool:
         if getattr(f, "type", None) is None:  # fonction non pré-déclarée (ne devrait pas arriver)
             self.pre_declarer_fonctions([f])
+        if f.corps is None:
+            raise self.erreur("une fonction abstraite n'est possible que dans une classe", f)
+        self._verifier_decorateurs(f)
         return self._verifier_fonction(f)
 
-    def _verifier_fonction(self, f: DeclFonction, soi: TypeClasse | None = None) -> bool:
+    def _verifier_fonction(self, f: DeclFonction, soi: TypeClasse | None = None,
+                           parent: TypeClasse | None = None) -> bool:
         t: TypeFonction = f.type  # type: ignore[attr-defined]
         for p, tp in zip(f.parametres, t.parametres):
             if p.defaut is not None:
@@ -477,6 +541,8 @@ class Verificateur:
         noms = set()
         if soi is not None:
             self.declarer("soi", soi, f, constante=True, genre="soi", description=f"soi: {soi}")
+        if parent is not None:
+            self.declarer("parent", parent, f, constante=True, genre="parent", description=f"parent: {parent}")
         for p, tp in zip(f.parametres, t.parametres):
             if p.nom in noms:
                 raise self.erreur(f"paramètre '{p.nom}' en double", p)
@@ -655,6 +721,8 @@ class Verificateur:
     def e_Identifiant(self, i: Identifiant) -> Type:
         sym = self.portee.chercher(i.nom)
         if sym is None:
+            if i.nom == "parent":
+                raise self.erreur("'parent' ne s'utilise que dans une méthode d'une classe qui 'herite' d'une autre", i)
             raise self.erreur(f"variable '{i.nom}' inconnue", i)
         self.enregistrer(i, i.nom, sym)
         if not sym.initialisee:
@@ -673,12 +741,48 @@ class Verificateur:
             raise self.erreur(f"'-' attend un nombre, mais reçoit un {t}", u)
         return t
 
+    def e_Etalement(self, e) -> Type:
+        t = self.expression(e.valeur)
+        if t != QUELCONQUE and not est_liste(t):
+            raise self.erreur(f"'...' s'applique à une liste, mais reçoit un {t}", e)
+        return t
+
     def e_Binaire(self, b: Binaire) -> Type:
         tg = self.expression(b.gauche)
         td = self.expression(b.droite)
         return self.type_binaire(b.op, tg, td, b)
 
+    OPERATEURS_CLASSE = {"+": "plus", "-": "moins", "*": "fois", "/": "divise", "%": "modulo",
+                         "<": "inferieur", ">": "inferieur", "<=": "inferieur", ">=": "inferieur", "==": "egal", "!=": "egal"}
+
+    def _operateur_classe(self, op: str, tg: Type, td: Type, noeud) -> Type | None:
+        """Surcharge d'opérateur : `a + b` appelle `a.plus(b)` si la classe définit la méthode."""
+        if op in (">", ">="):
+            tg, td = td, tg
+        if not isinstance(tg, TypeClasse):
+            return None
+        info = self.classes.get(tg.nom)
+        nom = self.OPERATEURS_CLASSE.get(op)
+        if info is None or nom is None or nom not in info.methodes:
+            return None
+        tm = info.methodes[nom]
+        if len(tm.parametres) != 1 or tm.minimum > 1:
+            raise self.erreur(f"la méthode d'opérateur '{nom}' de '{tg.nom}' doit prendre exactement 1 paramètre", noeud)
+        if td != QUELCONQUE and not compatible(td, tm.parametres[0]):
+            raise self.erreur(f"'{op}' sur un {tg.nom} attend un {tm.parametres[0]} à droite, mais reçoit un {td}", noeud)
+        if nom in ("egal", "inferieur"):
+            if tm.retour != BOOLEEN:
+                raise self.erreur(f"la méthode '{nom}' de '{tg.nom}' doit retourner un booleen", noeud)
+            return BOOLEEN
+        return tm.retour
+
     def type_binaire(self, op: str, tg: Type, td: Type, noeud) -> Type:
+        surcharge = self._operateur_classe(op, tg, td, noeud)
+        if surcharge is not None:
+            return surcharge
+        if isinstance(tg, TypeClasse) and op in self.OPERATEURS_CLASSE and op not in ("==", "!="):
+            raise self.erreur(f"'{op}' n'est pas défini pour un {tg.nom} : ajoutez une méthode "
+                              f"'{self.OPERATEURS_CLASSE[op]}(autre: {tg.nom})' à la classe", noeud)
         if op in ("==", "!="):
             if tg != QUELCONQUE and td != QUELCONQUE and not compatible(tg, td) and not compatible(td, tg):
                 raise self.erreur(f"comparaison impossible entre {tg} et {td} (toujours {'faux' if op == '==' else 'vrai'})", noeud)
@@ -761,9 +865,27 @@ class Verificateur:
                 raise self.erreur(f"le module '{t.nom}' ne définit pas '{m.nom}' (disponibles : {dispo})", m)
             self.enregistrer(m, m.nom, sym)
             return sym.type
+        if t == TYPE_META_CLASSE and isinstance(m.objet, Identifiant) and m.objet.nom in self.classes:
+            info = self.classes[m.objet.nom]
+            if m.nom in info.statiques or m.nom in info.constantes:
+                pos = info.positions.get(m.nom, (self.fichier, 0, 0))
+                sym = Symbole(info.statiques.get(m.nom) or info.constantes[m.nom], constante=True,
+                              genre="statique" if m.nom in info.statiques else "constante",
+                              description=info.descriptions.get(m.nom, m.nom), position=pos[1:], fichier=pos[0])
+                self.enregistrer(m, m.nom, sym)
+                return sym.type
+            if m.nom in info.methodes or m.nom in info.champs:
+                raise self.erreur(f"'{m.nom}' est un membre d'objet : il faut un objet '{info.nom}' pour y accéder "
+                                  f"(ou déclarez la méthode 'statique')", m)
+            dispo = ", ".join(sorted(list(info.statiques) + list(info.constantes))) or "aucun"
+            raise self.erreur(f"la classe '{info.nom}' n'a pas de méthode statique ni de constante '{m.nom}' (disponibles : {dispo})", m)
         if not isinstance(t, TypeClasse):
             raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}')", m)
         info = self.classes[t.nom]
+        if m.nom.startswith("_") and (m.nom in info.champs or m.nom in info.methodes):
+            if not (isinstance(m.objet, Identifiant) and m.objet.nom in ("soi", "parent")):
+                raise self.erreur(f"'{m.nom}' est privé (son nom commence par '_') : accessible seulement via 'soi.{m.nom}' "
+                                  f"dans les méthodes de '{t.nom}'", m)
         if m.nom in info.champs or m.nom in info.methodes:
             pos = info.positions.get(m.nom, (self.fichier, 0, 0))
             sym = Symbole(info.champs.get(m.nom) or info.methodes[m.nom], genre="champ" if m.nom in info.champs else "méthode",
@@ -785,6 +907,11 @@ class Verificateur:
             self.enregistrer(a.cible, a.cible.nom, getattr(info, "symbole", None))
         a.natif = None  # type: ignore[attr-defined]
         a.classe = info.nom  # type: ignore[attr-defined]
+        if info.abstraites:
+            raise self.erreur(f"'{info.nom}' est abstraite : il manque l'implémentation de "
+                              f"{', '.join(repr(n) for n in sorted(info.abstraites))}. Créez une classe enfant qui les implémente", a)
+        if any(isinstance(arg, Etalement) for arg in a.arguments):
+            raise self.erreur("'...' n'est pas possible pour créer un objet", a)
         noms_champs = list(info.champs)
         if len(a.arguments) > len(noms_champs):
             raise self.erreur(
@@ -827,6 +954,8 @@ class Verificateur:
             natif = NATIFS[a.cible.nom]
             a.cible.type = Type("natif")  # type: ignore[attr-defined]
             self.enregistrer(a.cible, a.cible.nom, self.portee.chercher(a.cible.nom))
+            if any(isinstance(arg, Etalement) for arg in a.arguments):
+                raise self.erreur(f"'...' n'est pas possible avec la fonction native '{a.cible.nom}'", a)
             types = [self.expression(arg) for arg in a.arguments]
             for arg, t in zip(a.arguments, types):
                 if t == RIEN:
@@ -843,12 +972,28 @@ class Verificateur:
         if not isinstance(tc, TypeFonction):
             raise self.erreur(f"une valeur de type {tc} ne peut pas être appelée comme une fonction", a)
         nom = a.cible.nom if isinstance(a.cible, Identifiant) else a.cible.nom if isinstance(a.cible, Membre) else "la fonction"
-        if not (tc.minimum <= len(types) <= len(tc.parametres)):
-            attendu = (f"{len(tc.parametres)}" if tc.minimum == len(tc.parametres)
-                       else f"entre {tc.minimum} et {len(tc.parametres)}")
+        etale = any(isinstance(arg, Etalement) for arg in a.arguments)
+        if etale:
+            # le nombre d'arguments n'est connu qu'à l'exécution : on vérifie ce qu'on peut
+            a.verifs_runtime = ()  # type: ignore[attr-defined]
+            fixes = [(arg, t) for arg, t in zip(a.arguments, types) if not isinstance(arg, Etalement)]
+            if tc.maximum is not None and len(fixes) > tc.maximum:
+                raise self.erreur(f"'{nom}' attend au plus {tc.maximum} argument(s)", a)
+            for i, (arg, t) in enumerate(fixes):
+                if i < len(tc.fixes) and not compatible(t, tc.fixes[i]):
+                    raise self.erreur(f"argument {i + 1} de '{nom}' : {tc.fixes[i]} attendu, mais {t} fourni", arg)
+            return tc.retour
+        if len(types) < tc.minimum or (tc.maximum is not None and len(types) > tc.maximum):
+            if tc.maximum is None:
+                attendu = f"au moins {tc.minimum}"
+            else:
+                attendu = (f"{tc.maximum}" if tc.minimum == tc.maximum else f"entre {tc.minimum} et {tc.maximum}")
             raise self.erreur(f"'{nom}' attend {attendu} argument(s), mais {len(types)} fourni(s)", a)
         verifs = []
-        for i, (arg, t, tp) in enumerate(zip(a.arguments, types, tc.parametres), 1):
+        n_fixes = len(tc.fixes)
+        t_reste = tc.parametres[-1].params[0] if tc.variadique and tc.parametres[-1].params else QUELCONQUE
+        for i, (arg, t) in enumerate(zip(a.arguments, types), 1):
+            tp = tc.parametres[i - 1] if i <= n_fixes else t_reste
             if not compatible(t, tp):
                 raise self.erreur(f"argument {i} de '{nom}' : {tp} attendu, mais {t} fourni", arg)
             verifs.append(t == QUELCONQUE and tp != QUELCONQUE)

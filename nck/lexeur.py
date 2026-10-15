@@ -6,16 +6,16 @@ from .erreurs import ErreurLexicale
 MOTS_CLES = {
     "variable", "constante", "fonction", "retourner",
     "si", "sinon", "tantque", "pour", "dans", "fin",
-    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme", "selon", "cas",
+    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever", "importer", "depuis", "comme", "selon", "cas", "statique", "abstraite", "parent",
     "et", "ou", "non",
     "vrai", "faux", "nul",
 }
 
 # Opérateurs classés du plus long au plus court pour l'analyse gloutonne.
 OPERATEURS = [
-    "->", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=",
+    "...", "->", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=",
     "+", "-", "*", "/", "%", "=", "<", ">",
-    "(", ")", "[", "]", "{", "}", ",", ":", ";", ".",
+    "(", ")", "[", "]", "{", "}", ",", ":", ";", ".", "@",
 ]
 
 

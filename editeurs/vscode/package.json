@@ -2,7 +2,7 @@
   "name": "nck-lang",
   "displayName": "NCK",
   "description": "Langage NCK : coloration, autocomplétion, survol, aide à la signature, erreurs en direct",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "nockiprogramtech",
   "license": "MIT",
   "engines": {

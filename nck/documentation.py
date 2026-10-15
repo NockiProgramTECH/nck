@@ -11,6 +11,7 @@ NATIFS_DOC: dict[str, tuple[str, str]] = {
     "entier": ("entier(valeur: quelconque) -> entier", "Convertit en entier (\"42\" → 42, 3.9 → 3, vrai → 1). Erreur si impossible."),
     "reel": ("reel(valeur: quelconque) -> reel", "Convertit en nombre réel (\"2.5\" ou \"2,5\" → 2.5)."),
     "booleen": ("booleen(valeur: quelconque) -> booleen", "Convertit en booléen (\"vrai\"/\"oui\"/\"1\" → vrai)."),
+    "est_un": ("est_un(valeur: quelconque, classe) -> booleen", "Vrai si la valeur est une instance de la classe (ou d'une classe enfant)."),
     "type_de": ("type_de(valeur: quelconque) -> texte", "Nom du type d'une valeur à l'exécution (\"entier\", \"liste\", nom de classe…)."),
     # listes / textes / dicos
     "longueur": ("longueur(x: liste | texte | dico) -> entier", "Nombre d'éléments d'une liste ou d'un dico, ou de caractères d'un texte."),
@@ -103,6 +104,9 @@ MOTS_CLES_DOC: dict[str, str] = {
     "classe": "Déclare une classe : champs typés (`nom: texte = defaut`) et méthodes (`fonction …`).",
     "herite": "Héritage : `classe Enfant herite Parent:`.",
     "soi": "L'objet courant dans une méthode (`soi.champ`).",
+    "parent": "Dans une méthode, accès à la classe parente : `parent.methode()`.",
+    "statique": "Méthode de classe, appelée sans objet : `statique fonction creer()` puis `Classe.creer()`.",
+    "abstraite": "Méthode sans corps que les classes enfants doivent implémenter ; la classe ne peut pas être instanciée.",
     "essayer": "Bloc protégé : `essayer: … attraper e: … enfin: … fin`.",
     "attraper": "Attrape une erreur : `attraper e:` ou `attraper TypeErreur e:`.",
     "enfin": "Bloc toujours exécuté à la fin d'un `essayer`.",

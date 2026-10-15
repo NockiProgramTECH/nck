@@ -251,6 +251,146 @@ variable groupe: liste<Personne> = [awa, issa] // un Etudiant est une Personne
 
 La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas redéclarer un champ du parent.
 
+### `parent` : appeler la méthode d'origine
+
+Dans une méthode d'une classe qui `herite`, `parent` donne accès aux méthodes de la classe parente pour l'objet courant.
+
+```
+classe Etudiant herite Personne:
+    fonction saluer() -> texte:
+        retourner parent.saluer() + " (étudiant)"
+    fin
+fin
+```
+
+### Méthodes statiques et constantes de classe
+
+Une méthode `statique` s'appelle sur la classe, sans objet (pas de `soi`). Une `constante` déclarée dans une classe se lit avec `Classe.NOM`.
+
+```
+classe Temperature:
+    degres: reel
+    constante ZERO_ABSOLU = -273.15
+
+    statique fonction depuis_fahrenheit(f: reel) -> Temperature:
+        retourner Temperature((f - 32.0) / 1.8)
+    fin
+fin
+
+variable t = Temperature.depuis_fahrenheit(100.0)
+ecrire(Temperature.ZERO_ABSOLU)
+```
+
+### Membres privés
+
+Un champ ou une méthode dont le nom commence par `_` est privé : il n'est accessible que via `soi._nom` (ou `parent._nom`) dans les méthodes de la classe. Toute autre utilisation est une erreur de type.
+
+```
+classe Compte:
+    _solde: entier = 0
+    fonction deposer(montant: entier): soi._solde = soi._solde + montant
+    fonction solde() -> entier: retourner soi._solde
+fin
+variable c = Compte()
+c.deposer(50)
+ecrire(c.solde())     // 50
+ecrire(c._solde)      // erreur : '_solde' est privé
+```
+
+### Méthodes abstraites
+
+Une méthode `abstraite` n'a pas de corps : elle décrit ce que les classes enfants doivent fournir. Tant qu'une classe a une méthode abstraite non implémentée, elle ne peut pas être instanciée.
+
+```
+classe Forme:
+    nom: texte
+    abstraite fonction aire() -> reel
+    fonction decrire() -> texte: retourner f"{soi.nom} : {soi.aire()}"
+fin
+
+classe Carre herite Forme:
+    cote: reel
+    fonction aire() -> reel: retourner soi.cote * soi.cote
+fin
+
+variable f = Forme("x")          // erreur : 'Forme' est abstraite (il manque 'aire')
+ecrire(Carre("petit", 2.0).decrire())   // petit : 4.0
+```
+
+### Tester la classe d'un objet : `est_un`
+
+```
+ecrire(est_un(c, Forme))     // vrai (Carre hérite de Forme)
+ecrire(type_de(c))           // "Carre"
+```
+
+### Surcharge d'opérateurs
+
+Si une classe définit certaines méthodes, les opérateurs les utilisent automatiquement :
+
+| Opérateur | Méthode à définir | Retour |
+|---|---|---|
+| `a + b` | `plus(autre)` | libre |
+| `a - b` | `moins(autre)` | libre |
+| `a * b` | `fois(autre)` | libre |
+| `a / b` | `divise(autre)` | libre |
+| `a % b` | `modulo(autre)` | libre |
+| `a == b`, `a != b` | `egal(autre) -> booleen` | booleen |
+| `a < b`, `a > b`, `a <= b`, `a >= b` | `inferieur(autre) -> booleen` | booleen |
+
+Sans `egal`, `==` compare l'identité (le même objet). `trier`, `contient`, `maximum`… fonctionnent sur des objets qui définissent `inferieur` / `egal`.
+
+```
+classe Vecteur:
+    x: reel
+    y: reel
+    fonction plus(autre: Vecteur) -> Vecteur: retourner Vecteur(soi.x + autre.x, soi.y + autre.y)
+    fonction egal(autre: Vecteur) -> booleen: retourner soi.x == autre.x et soi.y == autre.y
+    fonction texte() -> texte: retourner f"({soi.x}, {soi.y})"
+fin
+ecrire(Vecteur(1.0, 2.0) + Vecteur(3.0, 4.0))          // (4.0, 6.0)
+ecrire(Vecteur(1.0, 1.0) == Vecteur(1.0, 1.0))          // vrai
+```
+
+### Décorateurs
+
+Un décorateur est une fonction qui reçoit une fonction et en retourne une autre. `@deco` au-dessus d'une `fonction` (ou d'une méthode) remplace la fonction par `deco(fonction)` au moment de la définition. Plusieurs décorateurs s'appliquent de bas en haut.
+
+```
+fonction journaliser(f: fonction<liste<quelconque>, quelconque>) -> fonction<liste<quelconque>, quelconque>:
+    fonction enveloppe(...args) -> quelconque:
+        ecrire("appel avec", args)
+        retourner f(...args)
+    fin
+    retourner enveloppe
+fin
+
+@journaliser
+fonction addition(a: entier, b: entier) -> entier:
+    retourner a + b
+fin
+
+ecrire(addition(2, 3))    // appel avec [2, 3]   puis   5
+```
+
+Pour le vérificateur, la fonction décorée garde sa signature déclarée (`addition(a: entier, b: entier) -> entier`).
+
+### Paramètres variables `...args` et étalement `f(...liste)`
+
+- `fonction f(...nombres: liste<entier>)` : les arguments restants sont rassemblés dans la liste `nombres` (`...args` sans type = `liste<quelconque>`). Il doit être le dernier paramètre.
+- `f(...liste)` : les éléments de la liste sont passés comme arguments séparés (impossible avec les fonctions natives et la création d'objets).
+
+```
+fonction somme(...nombres: liste<entier>) -> entier:
+    variable total = 0
+    pour n dans nombres: total = total + n
+    retourner total
+fin
+ecrire(somme(1, 2, 3))          // 6
+variable l = [4, 5]
+ecrire(somme(0, ...l))          // 9
+```
+
 ## 11. Gestion des erreurs
 
 ```
@@ -377,6 +517,6 @@ Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moin
 
 ## 15. Mots réservés
 
-`variable constante fonction classe herite essayer attraper enfin lever importer depuis comme retourner si sinon selon cas tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe herite statique abstraite essayer attraper enfin lever importer depuis comme retourner si sinon selon cas tantque pour dans fin arreter continuer et ou non vrai faux nul`
 
-`soi` est défini automatiquement dans les méthodes.
+`soi` et `parent` sont définis automatiquement dans les méthodes.

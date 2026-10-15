@@ -153,6 +153,13 @@ class Parametre(Noeud):
     nom: str
     type_annot: TypeAnnot
     defaut: Optional[Expr] = None
+    variadique: bool = False            # ...args
+
+
+@dataclass
+class Etalement(Noeud):
+    """`...liste` dans un appel : étale les éléments comme arguments."""
+    valeur: "Expr"
 
 
 @dataclass
@@ -160,7 +167,10 @@ class DeclFonction(Noeud):
     nom: str
     parametres: list[Parametre]
     type_retour: TypeAnnot
-    corps: Bloc
+    corps: Optional[Bloc]               # None pour une méthode abstraite
+    decorateurs: list[Expr] = field(default_factory=list)
+    statique: bool = False
+    abstraite: bool = False
 
 
 @dataclass
@@ -176,6 +186,7 @@ class DeclClasse(Noeud):
     parent: Optional[str]
     champs: list[Champ]
     methodes: list[DeclFonction]
+    constantes: list[DeclVariable] = field(default_factory=list)   # constante MAX = 10 (accès Classe.MAX)
 
 
 @dataclass

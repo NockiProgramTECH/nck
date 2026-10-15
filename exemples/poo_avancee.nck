@@ -1,0 +1,87 @@
+// POO avancée : parent, statique, constante, privé, abstraite, est_un, opérateurs, décorateurs, ...args
+classe Forme:
+    nom: texte
+    constante UNITE = "cm"
+    abstraite fonction aire() -> reel
+    fonction decrire() -> texte:
+        retourner f"{soi.nom} : {soi.aire()} {Forme.UNITE}"
+    fin
+    statique fonction aide() -> texte:
+        retourner "Une forme a une aire"
+    fin
+fin
+
+classe Carre herite Forme:
+    cote: reel
+    fonction aire() -> reel:
+        retourner soi.cote * soi.cote
+    fin
+    fonction decrire() -> texte:
+        retourner "[carré] " + parent.decrire()
+    fin
+fin
+
+classe Compte:
+    _solde: entier = 0
+    fonction deposer(montant: entier):
+        soi._solde = soi._solde + montant
+    fin
+    fonction solde() -> entier:
+        retourner soi._solde
+    fin
+fin
+
+classe Vecteur:
+    x: reel
+    y: reel
+    fonction plus(autre: Vecteur) -> Vecteur:
+        retourner Vecteur(soi.x + autre.x, soi.y + autre.y)
+    fin
+    fonction fois(k: reel) -> Vecteur:
+        retourner Vecteur(soi.x * k, soi.y * k)
+    fin
+    fonction egal(autre: Vecteur) -> booleen:
+        retourner soi.x == autre.x et soi.y == autre.y
+    fin
+    fonction inferieur(autre: Vecteur) -> booleen:
+        retourner soi.x * soi.x + soi.y * soi.y < autre.x * autre.x + autre.y * autre.y
+    fin
+    fonction texte() -> texte:
+        retourner f"({soi.x}, {soi.y})"
+    fin
+fin
+
+variable c = Carre("petit", 2.0)
+ecrire(c.decrire())
+ecrire(Forme.aide())
+ecrire(Carre.UNITE)
+ecrire(est_un(c, Forme), est_un(c, Compte))
+
+variable cpt = Compte()
+cpt.deposer(50)
+ecrire(cpt.solde())
+
+variable v = Vecteur(1.0, 2.0) + Vecteur(3.0, 4.0)
+ecrire(v, v * 2.0, v == Vecteur(4.0, 6.0), Vecteur(1.0, 1.0) < v, v > Vecteur(0.0, 0.0))
+ecrire(trier([Vecteur(5.0, 5.0), Vecteur(1.0, 0.0), Vecteur(2.0, 2.0)]))
+
+fonction chrono(f: fonction<liste<entier>, entier>) -> fonction<liste<entier>, entier>:
+    fonction enveloppe(...args: liste<entier>) -> entier:
+        ecrire("appel avec", args)
+        retourner f(...args)
+    fin
+    retourner enveloppe
+fin
+
+@chrono
+fonction somme(...nombres: liste<entier>) -> entier:
+    variable total = 0
+    pour n dans nombres:
+        total = total + n
+    fin
+    retourner total
+fin
+
+ecrire(somme(1, 2, 3))
+variable l = [4, 5]
+ecrire(somme(0, ...l))

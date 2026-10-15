@@ -22,7 +22,7 @@ TYPES_SIMPLES = ["entier", "reel", "texte", "booleen", "liste", "dico", "fonctio
 GENRE_COMPLETION = {
     "variable": "Variable", "constante": "Constant", "paramètre": "Variable", "fonction": "Function",
     "classe": "Class", "module": "Module", "natif": "Function", "champ": "Field", "méthode": "Method",
-    "soi": "Variable", "motcle": "Keyword", "type": "TypeParameter",
+    "soi": "Variable", "parent": "Variable", "statique": "Method", "motcle": "Keyword", "type": "TypeParameter",
 }
 
 
@@ -180,6 +180,10 @@ class Analyse:
             lignes = [_bloc_code(info.signature())]
             if info.methodes:
                 lignes.append("Méthodes : " + ", ".join(f"`{m}`" for m in info.methodes))
+            if info.statiques:
+                lignes.append("Statiques : " + ", ".join(f"`{nom}.{m}()`" for m in info.statiques))
+            if info.constantes:
+                lignes.append("Constantes : " + ", ".join(f"`{nom}.{m}`" for m in info.constantes))
             return "\n\n".join(lignes)
         return _bloc_code(sym.description)
 
@@ -238,18 +242,36 @@ class Analyse:
 
     def _completions_membres(self, base: str, ligne: int) -> list[dict]:
         t = None
+        items: list[dict] = []
+        prive_ok = base in ("soi", "parent")
         if base == "soi":
             t = self.classe_a(ligne)
+        elif base == "parent":
+            t = self.classe_a(ligne)
+            info = self.verif.classes.get(t.nom) if isinstance(t, TypeClasse) else None
+            t = info.parent.type if info is not None and info.parent is not None else None
+        elif base in self.verif.classes:
+            # `Classe.` : méthodes statiques et constantes
+            info = self.verif.classes[base]
+            for n, tc in info.constantes.items():
+                items.append(self._item(n, "constante", str(tc), info.descriptions.get(n, "")))
+            for n, tm in info.statiques.items():
+                items.append(self._item(n, "fonction", str(tm), info.descriptions.get(n, ""),
+                                        insertion=n + ("()" if not tm.parametres else "(")))
+            return items
         else:
             d = self.symbole_visible(base, ligne)
             if d is not None and d["symbole"] is not None:
                 t = d["symbole"].type
-        items: list[dict] = []
         if isinstance(t, TypeClasse) and t.nom in self.verif.classes:
             info = self.verif.classes[t.nom]
             for n, tc in info.champs.items():
+                if n.startswith("_") and not prive_ok:
+                    continue
                 items.append(self._item(n, "champ", str(tc), info.descriptions.get(n, "")))
             for n, tm in info.methodes.items():
+                if n.startswith("_") and not prive_ok:
+                    continue
                 items.append(self._item(n, "méthode", str(tm), info.descriptions.get(n, ""),
                                         insertion=n + ("()" if not tm.parametres else "(")))
         elif isinstance(t, TypeModule):

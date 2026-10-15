@@ -41,6 +41,8 @@ def vers_texte(v: object) -> str:
         return v.classe.nom + "(" + ", ".join(f"{k}={_repr_elem(x)}" for k, x in v.champs.items()) + ")"
     if isinstance(v, ClasseNck):
         return f"<classe {v.nom}>"
+    if isinstance(v, ParentNck):
+        return f"<parent {v.classe.nom}>"
     if isinstance(v, ModuleNck):
         return f"<module {v.nom}>"
     if isinstance(v, FonctionNck):
@@ -85,7 +87,8 @@ def nom_type_valeur(v: object) -> str:
 class ClasseNck:
     """Classe définie par l'utilisateur (remplie par l'interpréteur)."""
 
-    __slots__ = ("nom", "ancetres", "champs", "types_champs", "defauts", "methodes", "construire")
+    __slots__ = ("nom", "ancetres", "champs", "types_champs", "defauts", "methodes", "construire",
+                 "parent", "statiques", "constantes", "abstraites")
 
     def __init__(self, nom: str, ancetres: tuple[str, ...]):
         self.nom = nom
@@ -95,19 +98,97 @@ class ClasseNck:
         self.defauts: dict[str, Callable] = {}       # nom -> fonction () -> valeur
         self.methodes: dict[str, Callable] = {}      # nom -> fonction (objet, *args)
         self.construire: Callable = None             # type: ignore[assignment]
+        self.parent: "ClasseNck | None" = None
+        self.statiques: dict[str, object] = {}       # méthodes statiques (callables)
+        self.constantes: dict[str, object] = {}      # constantes de classe
+        self.abstraites: set[str] = set()            # méthodes abstraites non implémentées
+
+    def est(self, nom: str) -> bool:
+        return self.nom == nom or nom in self.ancetres
+
+
+class ParentNck:
+    """Proxy `parent` dans une méthode : accède aux méthodes de la classe parente pour l'objet courant."""
+
+    __slots__ = ("objet", "classe")
+
+    def __init__(self, objet: "ObjetNck", classe: ClasseNck):
+        self.objet = objet
+        self.classe = classe
 
     def __call__(self, *args, **kwargs):
         return self.construire(*args, **kwargs)
 
 
 class ObjetNck:
-    """Instance d'une classe NCK."""
+    """Instance d'une classe NCK. Les opérateurs délèguent aux méthodes spéciales si elles existent."""
 
     __slots__ = ("classe", "champs")
 
     def __init__(self, classe: ClasseNck, champs: dict):
         self.classe = classe
         self.champs = champs
+
+    def _methode(self, nom: str):
+        return self.classe.methodes.get(nom)
+
+    def __eq__(self, autre):
+        m = self._methode("egal")
+        if m is not None:
+            return bool(m(self, autre))
+        return self is autre
+
+    def __ne__(self, autre):
+        return not self.__eq__(autre)
+
+    def __hash__(self):
+        m = self._methode("hachage")
+        return hash(m(self)) if m is not None else id(self)
+
+    def __lt__(self, autre):
+        m = self._methode("inferieur")
+        if m is None:
+            raise ErreurExecution(f"la classe '{self.classe.nom}' ne définit pas 'inferieur' : comparaison impossible")
+        return bool(m(self, autre))
+
+    def __gt__(self, autre):
+        if isinstance(autre, ObjetNck):
+            return autre.__lt__(self)
+        return NotImplemented
+
+    def __le__(self, autre):
+        return self.__lt__(autre) or self.__eq__(autre)
+
+    def __ge__(self, autre):
+        return self.__gt__(autre) or self.__eq__(autre)
+
+    def _op(self, nom: str, autre):
+        m = self._methode(nom)
+        if m is None:
+            raise ErreurExecution(f"la classe '{self.classe.nom}' ne définit pas la méthode '{nom}'")
+        return m(self, autre)
+
+    def __add__(self, autre):
+        return self._op("plus", autre)
+
+    def __sub__(self, autre):
+        return self._op("moins", autre)
+
+    def __mul__(self, autre):
+        return self._op("fois", autre)
+
+    def __truediv__(self, autre):
+        return self._op("divise", autre)
+
+    def __mod__(self, autre):
+        return self._op("modulo", autre)
+
+    def __neg__(self):
+        return self._op("oppose", None) if "oppose" in self.classe.methodes else self._op("oppose", None)
+
+
+OPERATEURS_CLASSE = {"+": "plus", "-": "moins", "*": "fois", "/": "divise", "%": "modulo",
+                     "==": "egal", "!=": "egal", "<": "inferieur", ">": "inferieur", "<=": "inferieur", ">=": "inferieur"}
 
 
 class ModuleNck:
@@ -276,6 +357,20 @@ def _booleen(v):
 @natif("type_de", simple("type_de", [QUELCONQUE], TEXTE))
 def _type_de(v):
     return nom_type_valeur(v)
+
+
+def _v_est_un(types, erreur):
+    _arite("est_un", types, 2, 2, erreur)
+    if types[1] != QUELCONQUE and types[1].nom != "classe":
+        raise erreur(f"argument 2 de 'est_un' : une classe attendue (ex : est_un(x, Personne)), mais {types[1]} fourni")
+    return BOOLEEN
+
+
+@natif("est_un", _v_est_un)
+def _est_un(v, classe):
+    if not isinstance(classe, ClasseNck):
+        raise ErreurExecution(f"'est_un' attend une classe en 2e argument, mais {nom_type_valeur(classe)} fourni")
+    return isinstance(v, ObjetNck) and v.classe.est(classe.nom)
 
 
 # ---------- listes et textes ----------

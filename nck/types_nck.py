@@ -19,13 +19,25 @@ class TypeFonction(Type):
     parametres: tuple[Type, ...] = field(default_factory=tuple)
     retour: Type = None  # type: ignore[assignment]
     obligatoires: int = -1      # nombre de paramètres sans valeur par défaut (-1 : tous)
+    variadique: bool = False    # le dernier paramètre est `...args` (liste des arguments restants)
+
+    @property
+    def fixes(self) -> tuple["Type", ...]:
+        return self.parametres[:-1] if self.variadique else self.parametres
 
     @property
     def minimum(self) -> int:
-        return len(self.parametres) if self.obligatoires < 0 else self.obligatoires
+        n = len(self.fixes)
+        return n if self.obligatoires < 0 else min(self.obligatoires, n)
+
+    @property
+    def maximum(self) -> int | None:
+        return None if self.variadique else len(self.parametres)
 
     def __str__(self) -> str:
-        params = [str(p) + ("?" if i >= self.minimum else "") for i, p in enumerate(self.parametres)]
+        params = [str(p) + ("?" if i >= self.minimum else "") for i, p in enumerate(self.fixes)]
+        if self.variadique:
+            params.append("..." + str(self.parametres[-1]))
         return f"fonction({', '.join(params)}) -> {self.retour}"
 
 
@@ -130,10 +142,12 @@ def compatible(source: Type, cible: Type) -> bool:
         return source.herite_de(cible.nom)
     if isinstance(source, TypeFonction) and isinstance(cible, TypeFonction):
         # la source doit accepter tous les appels valides pour la cible
-        n = len(cible.parametres)
-        if source.minimum > cible.minimum or len(source.parametres) < n:
+        n = len(cible.fixes)
+        if source.minimum > cible.minimum:
             return False
-        return (all(compatible(c, s) for s, c in zip(source.parametres[:n], cible.parametres))
+        if source.maximum is not None and (cible.maximum is None or source.maximum < n):
+            return False
+        return (all(compatible(c, s) for s, c in zip(source.fixes[:n], cible.fixes))
                 and compatible(source.retour, cible.retour))
     return False
 

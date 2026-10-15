@@ -19,6 +19,7 @@ Cette page est générée depuis `nck/documentation.py` (la même source que le 
 | `reel(valeur: quelconque) -> reel` | Convertit en nombre réel ("2.5" ou "2,5" → 2.5). |
 | `booleen(valeur: quelconque) -> booleen` | Convertit en booléen ("vrai"/"oui"/"1" → vrai). |
 | `type_de(valeur: quelconque) -> texte` | Nom du type d'une valeur à l'exécution ("entier", "liste", nom de classe…). |
+| `est_un(valeur: quelconque, classe) -> booleen` | Vrai si la valeur est une instance de la classe (ou d'une classe enfant). |
 
 ## Listes
 

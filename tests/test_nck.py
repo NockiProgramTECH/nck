@@ -723,3 +723,56 @@ fin
 def test_exemple_confort():
     source = (RACINE / "exemples" / "confort.nck").read_text(encoding="utf-8")
     assert "7 -> week-end" in run(source)
+
+
+# ---------- v0.9 : POO complète et décorateurs ----------
+
+
+POO_AVANCEE = (RACINE / "exemples" / "poo_avancee.nck").read_text(encoding="utf-8")
+
+
+def test_exemple_poo_avancee():
+    out = run(POO_AVANCEE)
+    assert "[carré] petit : 4.0 cm" in out
+    assert "vrai faux" in out
+    assert "[(1.0, 0.0), (2.0, 2.0), (5.0, 5.0)]" in out
+    assert "appel avec [0, 4, 5]\n9" in out
+
+
+def test_abstraite_non_instanciable():
+    with pytest.raises(ErreurType, match="abstraite"):
+        run("classe A:\n    abstraite fonction f() -> entier\nfin\nvariable a = A()\n")
+
+
+def test_prive_inaccessible():
+    with pytest.raises(ErreurType, match="privé"):
+        run("classe A:\n    _x: entier = 1\nfin\nvariable a = A()\necrire(a._x)\n")
+
+
+def test_statique_et_constante():
+    out = run("classe T:\n    constante MAX = 3\n    statique fonction deux() -> entier: retourner 2\nfin\n"
+              "ecrire(T.MAX + T.deux())\n")
+    assert out == "5\n"
+    with pytest.raises(ErreurType, match="statique"):
+        run("classe A:\n    fonction f() -> entier: retourner 1\nfin\necrire(A.f())\n")
+
+
+def test_parent_hors_heritage():
+    with pytest.raises(ErreurType, match="parent"):
+        run("classe A:\n    x: entier\n    fonction g(): ecrire(parent.x)\nfin\n")
+
+
+def test_operateur_manquant():
+    with pytest.raises(ErreurType, match="plus"):
+        run("classe A:\n    x: entier\nfin\nvariable a = A(1) + A(2)\n")
+
+
+def test_variadique_types():
+    with pytest.raises(ErreurType, match="argument 2"):
+        run("fonction f(...a: liste<texte>):\n    ecrire(a)\nfin\nf(\"a\", 2)\n")
+    assert run("fonction n(...a) -> entier: retourner longueur(a)\necrire(n(), n(1, \"b\", vrai))\n") == "0 3\n"
+
+
+def test_decorateur_invalide():
+    with pytest.raises(ErreurType, match="décorateur"):
+        run("fonction d(x: entier) -> entier: retourner x\n@d\nfonction f():\n    ecrire(1)\nfin\n")

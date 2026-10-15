@@ -80,8 +80,9 @@
         { "name": "keyword.control.exception.nck", "match": "\\b(essayer|attraper|enfin|lever)\\b" },
         { "name": "keyword.control.import.nck", "match": "\\b(importer|depuis|comme)\\b" },
         { "name": "storage.type.nck", "match": "\\b(variable|constante|fonction|classe)\\b" },
-        { "name": "storage.modifier.nck", "match": "\\b(herite)\\b" },
-        { "name": "variable.language.nck", "match": "\\b(soi)\\b" }
+        { "name": "storage.modifier.nck", "match": "\\b(herite|statique|abstraite)\\b" },
+        { "name": "variable.language.nck", "match": "\\b(soi|parent)\\b" },
+        { "name": "entity.name.function.decorator.nck", "match": "@[A-Za-z_][A-Za-z0-9_.]*" }
       ]
     },
     "types": {

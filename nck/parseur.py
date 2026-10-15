@@ -4,6 +4,7 @@ from .arbre import (
     Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Cas, Champ, Continuer, DeclClasse, DeclFonction,
     DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral,
     Logique, Membre, Parametre, Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
+    Etalement,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -128,6 +129,17 @@ class Parseur:
 
     def instruction(self) -> Instr:
         j = self.courant()
+        if j.genre == "op" and j.valeur == "@":
+            decorateurs: list[Expr] = []
+            while self.est_op("@"):
+                self.avancer()
+                decorateurs.append(self.expr_postfixe())
+                self.sauter_nl()
+            if not self.est_motcle("fonction"):
+                raise self.erreur("un décorateur (@nom) doit être suivi d'une déclaration 'fonction'")
+            f = self.decl_fonction()
+            f.decorateurs = decorateurs
+            return f
         if j.genre == "motcle":
             mot = j.valeur
             if mot in ("variable", "constante"):
@@ -148,6 +160,8 @@ class Parseur:
                 return self.instr_importer()
             if mot == "comme":
                 raise self.erreur("'comme' inattendu : il s'utilise après importer \"fichier.nck\"")
+            if mot in ("statique", "abstraite"):
+                raise self.erreur(f"'{mot}' ne s'utilise que devant une méthode, à l'intérieur d'une classe")
             if mot == "lever":
                 self.avancer()
                 valeur = self.expression()
@@ -228,7 +242,7 @@ class Parseur:
             self.attendre_op(">")
         return TypeAnnot(j.valeur, params, ligne=j.ligne, colonne=j.colonne)
 
-    def decl_fonction(self) -> DeclFonction:
+    def decl_fonction(self, abstraite: bool = False) -> DeclFonction:
         mot = self.avancer()
         nom = self.attendre_ident("nom de fonction attendu")
         self.attendre_op("(")
@@ -236,7 +250,21 @@ class Parseur:
         parametres: list[Parametre] = []
         if not self.est_op(")"):
             while True:
+                variadique = False
+                if self.est_op("..."):
+                    self.avancer()
+                    variadique = True
                 pnom = self.attendre_ident("nom de paramètre attendu")
+                if variadique:
+                    ptype = TypeAnnot("liste", [TypeAnnot("quelconque", ligne=pnom.ligne, colonne=pnom.colonne)],
+                                      ligne=pnom.ligne, colonne=pnom.colonne)
+                    if self.est_op(":"):
+                        self.avancer()
+                        ptype = self.type_annot()
+                    parametres.append(Parametre(pnom.valeur, ptype, None, True, ligne=pnom.ligne, colonne=pnom.colonne))
+                    if not self.est_op(")"):
+                        raise self.erreur(f"le paramètre variadique '...{pnom.valeur}' doit être le dernier")
+                    break
                 self.attendre_op(":", f"':' attendu après le paramètre '{pnom.valeur}' pour indiquer son type")
                 ptype = self.type_annot()
                 defaut = None
@@ -257,6 +285,12 @@ class Parseur:
             type_retour = self.type_annot()
         else:
             type_retour = TypeAnnot("rien", ligne=nom.ligne, colonne=nom.colonne)
+        if abstraite:
+            self.fin_instruction()
+            f = DeclFonction(nom.valeur, parametres, type_retour, None, abstraite=True, ligne=mot.ligne, colonne=mot.colonne)
+            f.ligne_fin = mot.ligne  # type: ignore[attr-defined]
+            f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+            return f
         corps, multi = self.corps("fin")
         ligne_fin = self.attendre_motcle("fin").ligne if multi else self.jetons[self.pos - 1].ligne
         f = DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
@@ -274,12 +308,33 @@ class Parseur:
         self.attendre_op(":", f"':' attendu après le nom de la classe '{nom.valeur}'")
         champs: list[Champ] = []
         methodes: list[DeclFonction] = []
+        constantes: list[DeclVariable] = []
         self.sauter_nl()
         while not self.est_motcle("fin"):
             if self.est("fin_fichier"):
                 raise self.erreur(f"'fin' attendu pour fermer la classe '{nom.valeur}' (ligne {mot.ligne})")
             if self.est_motcle("fonction"):
                 methodes.append(self.decl_fonction())
+            elif self.est_op("@"):
+                m = self.instruction()
+                assert isinstance(m, DeclFonction)
+                methodes.append(m)
+            elif self.est_motcle("statique"):
+                self.avancer()
+                if not self.est_motcle("fonction"):
+                    raise self.erreur("'statique' doit être suivi de 'fonction'")
+                m = self.decl_fonction()
+                m.statique = True
+                methodes.append(m)
+            elif self.est_motcle("abstraite"):
+                self.avancer()
+                if not self.est_motcle("fonction"):
+                    raise self.erreur("'abstraite' doit être suivi de 'fonction'")
+                methodes.append(self.decl_fonction(abstraite=True))
+            elif self.est_motcle("constante"):
+                constantes.append(self.decl_variable())
+            elif self.est_motcle("variable"):
+                raise self.erreur("dans une classe, un champ s'écrit 'nom: type' (sans 'variable') ; utilisez 'constante' pour une constante de classe")
             elif self.est("ident"):
                 cnom = self.avancer()
                 self.attendre_op(":", f"':' attendu après le champ '{cnom.valeur}' pour indiquer son type")
@@ -292,11 +347,11 @@ class Parseur:
                 champs.append(Champ(cnom.valeur, ctype, defaut, ligne=cnom.ligne, colonne=cnom.colonne))
             else:
                 raise self.erreur(
-                    f"dans une classe, seuls des champs ('nom: type') et des méthodes ('fonction ...') sont "
-                    f"autorisés, mais {self._decrire(self.courant())} trouvé")
+                    f"dans une classe, seuls des champs ('nom: type'), des méthodes ('fonction ...'), "
+                    f"'statique', 'abstraite' et 'constante' sont autorisés, mais {self._decrire(self.courant())} trouvé")
             self.sauter_nl()
         ligne_fin = self.attendre_motcle("fin").ligne
-        c = DeclClasse(nom.valeur, parent, champs, methodes, ligne=mot.ligne, colonne=mot.colonne)
+        c = DeclClasse(nom.valeur, parent, champs, methodes, constantes, ligne=mot.ligne, colonne=mot.colonne)
         c.ligne_fin = ligne_fin  # type: ignore[attr-defined]
         c.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
         return c
@@ -542,6 +597,10 @@ class Parseur:
 
     def _argument(self, args: list[Expr], nommes: list[tuple[str, Expr]]) -> None:
         j = self.courant()
+        if self.est_op("..."):
+            self.avancer()
+            args.append(Etalement(self.expression(), ligne=j.ligne, colonne=j.colonne))
+            return
         suivant = self.jetons[self.pos + 1] if self.pos + 1 < len(self.jetons) else None
         if j.genre == "ident" and suivant is not None and suivant.genre == "op" and suivant.valeur == "=":
             self.avancer()
@@ -589,6 +648,9 @@ class Parseur:
             if j.valeur == "nul":
                 self.avancer()
                 return Litteral(None, ligne=j.ligne, colonne=j.colonne)
+            if j.valeur == "parent":
+                self.avancer()
+                return Identifiant("parent", ligne=j.ligne, colonne=j.colonne)
             raise self.erreur(f"le mot-clé '{j.valeur}' ne peut pas être utilisé ici")
         if j.genre == "ident":
             self.avancer()
