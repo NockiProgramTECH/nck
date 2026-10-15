@@ -1,0 +1,24 @@
+{
+  "comments": { "lineComment": "//", "blockComment": ["/*", "*/"] },
+  "brackets": [["(", ")"], ["[", "]"], ["{", "}"]],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "[", "close": "]" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "'", "close": "'", "notIn": ["string"] },
+    { "open": "/*", "close": " */", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""], ["'", "'"]],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(si|sinon|tantque|pour|fonction|classe|essayer|attraper|enfin)\\b.*:\\s*(//.*|#.*)?$",
+    "decreaseIndentPattern": "^\\s*(fin|sinon|attraper|enfin)\\b"
+  },
+  "folding": {
+    "markers": {
+      "start": "^\\s*(si|tantque|pour|fonction|classe|essayer)\\b.*:\\s*$",
+      "end": "^\\s*fin\\b"
+    }
+  },
+  "wordPattern": "[A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F]*"
+}

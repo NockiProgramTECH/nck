@@ -199,7 +199,41 @@ variable groupe: liste<Personne> = [awa, issa] // un Etudiant est une Personne
 
 La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas redéclarer un champ du parent.
 
-## 10. Fonctions natives
+## 10. Gestion des erreurs
+
+```
+essayer:
+    variable n = entier(lire("nombre ? "))
+    ecrire(10 / n)
+attraper e:                          // e est de type Erreur
+    ecrire("Problème :", e.message)
+enfin:                               // facultatif, toujours exécuté
+    ecrire("terminé")
+fin
+```
+
+- `lever "message"` lève une `Erreur` ; `lever MonErreur(...)` lève une erreur personnalisée.
+- Les erreurs d'exécution du langage (division par zéro, index hors limites, conversion impossible, `verifier`…) sont attrapables de la même façon.
+- `Erreur` est une classe intégrée avec un champ `message: texte`. On crée ses propres erreurs en héritant :
+
+```
+classe ErreurSolde herite Erreur:
+    manque: entier
+fin
+
+essayer:
+    lever ErreurSolde("solde insuffisant", 30)
+attraper ErreurSolde e:              // seulement ce type (et ses enfants)
+    ecrire(e.message, e.manque)
+attraper e:                          // tout le reste
+    ecrire("autre :", e.message)
+fin
+```
+
+Les clauses `attraper` sont testées dans l'ordre ; si aucune ne correspond, l'erreur continue de remonter.
+Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : ErreurSolde non attrapée : solde insuffisant`.
+
+## 11. Fonctions natives
 
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
@@ -229,7 +263,7 @@ La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas
 - `horloge()` → secondes (chronométrage), `attendre(secondes)`, `quitter(code?)`
 - `verifier(condition, message?)` — stoppe le programme si la condition est fausse
 
-## 11. Erreurs
+## 12. Erreurs
 
 Trois familles, toutes avec ligne et colonne :
 
@@ -245,8 +279,8 @@ Erreur d'exécution : division par zéro
 
 Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moindre ligne.
 
-## 12. Mots réservés
+## 13. Mots réservés
 
-`variable constante fonction classe herite retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe herite essayer attraper enfin lever retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
 
 `soi` est défini automatiquement dans les méthodes.

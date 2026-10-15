@@ -1,0 +1,23 @@
+{
+  "name": "nck-lang",
+  "displayName": "NCK",
+  "description": "Coloration syntaxique pour le langage NCK (fichiers .nck)",
+  "version": "0.1.0",
+  "publisher": "nockiprogramtech",
+  "license": "MIT",
+  "engines": { "vscode": "^1.60.0" },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [{
+      "id": "nck",
+      "aliases": ["NCK", "nck"],
+      "extensions": [".nck"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "nck",
+      "scopeName": "source.nck",
+      "path": "./syntaxes/nck.tmLanguage.json"
+    }]
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "NCK",
+  "scopeName": "source.nck",
+  "patterns": [
+    { "include": "#commentaires" },
+    { "include": "#chaines" },
+    { "include": "#nombres" },
+    { "include": "#declaration-fonction" },
+    { "include": "#declaration-classe" },
+    { "include": "#mots-cles" },
+    { "include": "#types" },
+    { "include": "#constantes" },
+    { "include": "#operateurs-mots" },
+    { "include": "#natifs" },
+    { "include": "#appels" },
+    { "include": "#operateurs" }
+  ],
+  "repository": {
+    "commentaires": {
+      "patterns": [
+        { "name": "comment.line.double-slash.nck", "match": "//.*$" },
+        { "name": "comment.line.number-sign.nck", "match": "#.*$" },
+        { "name": "comment.block.nck", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "chaines": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.nck",
+          "begin": "\"", "end": "\"",
+          "patterns": [{ "name": "constant.character.escape.nck", "match": "\\\\." }]
+        },
+        {
+          "name": "string.quoted.single.nck",
+          "begin": "'", "end": "'",
+          "patterns": [{ "name": "constant.character.escape.nck", "match": "\\\\." }]
+        }
+      ]
+    },
+    "nombres": {
+      "patterns": [
+        { "name": "constant.numeric.float.nck", "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*([eE][+-]?[0-9]+)?\\b" },
+        { "name": "constant.numeric.float.nck", "match": "\\b[0-9][0-9_]*[eE][+-]?[0-9]+\\b" },
+        { "name": "constant.numeric.integer.nck", "match": "\\b[0-9][0-9_]*\\b" }
+      ]
+    },
+    "declaration-fonction": {
+      "match": "\\b(fonction)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.function.nck" },
+        "2": { "name": "entity.name.function.nck" }
+      }
+    },
+    "declaration-classe": {
+      "match": "\\b(classe)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(herite)\\s+([A-Za-z_][A-Za-z0-9_]*))?",
+      "captures": {
+        "1": { "name": "storage.type.class.nck" },
+        "2": { "name": "entity.name.type.class.nck" },
+        "3": { "name": "storage.modifier.nck" },
+        "4": { "name": "entity.other.inherited-class.nck" }
+      }
+    },
+    "mots-cles": {
+      "patterns": [
+        { "name": "keyword.control.conditional.nck", "match": "\\b(si|sinon)\\b" },
+        { "name": "keyword.control.loop.nck", "match": "\\b(tantque|pour|dans|arreter|continuer)\\b" },
+        { "name": "keyword.control.flow.nck", "match": "\\b(retourner|fin)\\b" },
+        { "name": "keyword.control.exception.nck", "match": "\\b(essayer|attraper|enfin|lever)\\b" },
+        { "name": "storage.type.nck", "match": "\\b(variable|constante|fonction|classe)\\b" },
+        { "name": "storage.modifier.nck", "match": "\\b(herite)\\b" },
+        { "name": "variable.language.nck", "match": "\\b(soi)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "support.type.primitive.nck", "match": "\\b(entier|reel|texte|booleen|liste|rien|quelconque)\\b" },
+        { "name": "support.class.nck", "match": "\\b(Erreur)\\b" },
+        { "name": "entity.name.type.nck", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" }
+      ]
+    },
+    "constantes": {
+      "name": "constant.language.nck",
+      "match": "\\b(vrai|faux|nul)\\b"
+    },
+    "operateurs-mots": {
+      "name": "keyword.operator.logical.nck",
+      "match": "\\b(et|ou|non)\\b"
+    },
+    "natifs": {
+      "name": "support.function.builtin.nck",
+      "match": "\\b(ecrire|lire|texte|entier|reel|booleen|type_de|longueur|intervalle|ajouter|retirer|inserer|contient|position|trier|inverser|copier|tranche|somme|minimum|maximum|majuscule|minuscule|nettoyer|remplacer|decouper|joindre|commence_par|termine_par|caractere|code|absolu|racine|puissance|arrondir|plancher|plafond|division_entiere|aleatoire|horloge|attendre|quitter|verifier)(?=\\s*\\()"
+    },
+    "appels": {
+      "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "captures": { "1": { "name": "entity.name.function.call.nck" } }
+    },
+    "operateurs": {
+      "patterns": [
+        { "name": "keyword.operator.arrow.nck", "match": "->" },
+        { "name": "keyword.operator.comparison.nck", "match": "==|!=|<=|>=|<|>" },
+        { "name": "keyword.operator.assignment.nck", "match": "\\+=|-=|\\*=|/=|=" },
+        { "name": "keyword.operator.arithmetic.nck", "match": "\\+|-|\\*|/|%" }
+      ]
+    }
+  }
+}

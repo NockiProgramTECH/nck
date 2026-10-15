@@ -2,8 +2,8 @@
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Membre, Pour,
-    Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
+    Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
 from .natifs import NATIFS
@@ -13,10 +13,11 @@ from .types_nck import (
 )
 
 TYPE_META_CLASSE = Type("classe")   # type du symbole qui désigne une classe (ex : `Personne`)
+TYPE_ERREUR = TypeClasse("Erreur")  # classe intégrée
 
 
 class InfoClasse:
-    def __init__(self, nom: str, type_: TypeClasse, parent: "InfoClasse | None", noeud: DeclClasse):
+    def __init__(self, nom: str, type_: TypeClasse, parent: "InfoClasse | None", noeud: "DeclClasse | None"):
         self.nom = nom
         self.type = type_
         self.parent = parent
@@ -73,6 +74,12 @@ class Verificateur:
         self.classes: dict[str, InfoClasse] = {}
         for nom in NATIFS:
             self.portee.symboles[nom] = Symbole(Type("natif"), constante=True)
+        # Classe intégrée `Erreur` (base de toutes les erreurs levées / attrapées)
+        erreur = InfoClasse("Erreur", TYPE_ERREUR, None, None)
+        erreur.champs["message"] = TEXTE
+        erreur.prete = True
+        self.classes["Erreur"] = erreur
+        self.portee.symboles["Erreur"] = Symbole(TYPE_META_CLASSE, constante=True)
 
     # ----- aides -----
 
@@ -381,6 +388,30 @@ class Verificateur:
         r.verif_runtime = (t == QUELCONQUE and attendu != QUELCONQUE)  # type: ignore[attr-defined]
         r.type_attendu = attendu  # type: ignore[attr-defined]
         return True
+
+    def i_Essayer(self, e: Essayer) -> bool:
+        termine = self.bloc(e.corps)
+        for cl in e.clauses:
+            t = self.resoudre_type(cl.type_annot) if cl.type_annot else TYPE_ERREUR
+            if not (isinstance(t, TypeClasse) and t.herite_de("Erreur")):
+                raise self.erreur(f"'attraper' attend une classe d'erreur (héritant de Erreur), mais {t} fourni",
+                                  cl.type_annot)
+            cl.type = t  # type: ignore[attr-defined]
+            self.ouvrir()
+            self.declarer(cl.variable, t, cl)
+            termine = self.bloc(cl.corps) and termine
+            self.fermer()
+        if e.enfin is not None:
+            if self.bloc(e.enfin):
+                termine = True
+        return termine
+
+    def i_Lever(self, l: Lever) -> bool:
+        t = self.expression(l.valeur)
+        if t == TEXTE or t == QUELCONQUE or (isinstance(t, TypeClasse) and t.herite_de("Erreur")):
+            l.est_texte = (t == TEXTE)  # type: ignore[attr-defined]
+            return True
+        raise self.erreur(f"'lever' attend un texte ou une erreur (classe héritant de Erreur), mais {t} fourni", l.valeur)
 
     def i_Arreter(self, a: Arreter) -> bool:
         if self.profondeur_boucle == 0:

@@ -34,6 +34,8 @@ def vers_texte(v: object) -> str:
     if isinstance(v, ObjetNck):
         if "texte" in v.classe.methodes:
             return str(v.classe.methodes["texte"](v))
+        if v.classe.nom == "Erreur" or "Erreur" in v.classe.ancetres:
+            return f"{v.classe.nom} : {v.champs.get('message', '')}"
         return v.classe.nom + "(" + ", ".join(f"{k}={_repr_elem(x)}" for k, x in v.champs.items()) + ")"
     if isinstance(v, ClasseNck):
         return f"<classe {v.nom}>"

@@ -6,7 +6,7 @@ from .erreurs import ErreurLexicale
 MOTS_CLES = {
     "variable", "constante", "fonction", "retourner",
     "si", "sinon", "tantque", "pour", "dans", "fin",
-    "arreter", "continuer", "classe", "herite",
+    "arreter", "continuer", "classe", "herite", "essayer", "attraper", "enfin", "lever",
     "et", "ou", "non",
     "vrai", "faux", "nul",
 }

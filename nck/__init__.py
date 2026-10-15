@@ -12,7 +12,7 @@ from .lexeur import lexer
 from .parseur import parser
 from .verificateur import verifier
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "__version__", "executer_source", "compiler_source", "lexer", "parser", "verifier", "Interpreteur",
     "ErreurNck", "ErreurLexicale", "ErreurSyntaxe", "ErreurType", "ErreurExecution",

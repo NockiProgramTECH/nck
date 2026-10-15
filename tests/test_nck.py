@@ -389,3 +389,93 @@ ecrire(p, f())
 def test_exemple_classes():
     source = (RACINE / "exemples" / "classes.nck").read_text(encoding="utf-8")
     assert "Etudiant" not in run(source).split("\n")[0]
+
+
+# ---------- gestion des erreurs ----------
+
+def test_essayer_attraper_enfin():
+    src = """
+essayer:
+    ecrire(1)
+    si (vrai): lever "boum"
+    ecrire(2)
+attraper e:
+    ecrire("attrapé :", e.message)
+enfin:
+    ecrire("fin")
+fin
+"""
+    assert run(src) == "1\nattrapé : boum\nfin\n"
+
+
+def test_erreur_execution_attrapable():
+    assert run('essayer:\n    ecrire(1 / 0)\nattraper e:\n    ecrire(e.message)\nfin') == "division par zéro\n"
+
+
+def test_classe_erreur_personnalisee_et_filtrage():
+    src = """
+classe ErreurSolde herite Erreur:
+    manque: entier
+fin
+essayer:
+    lever ErreurSolde("insuffisant", 5)
+attraper ErreurSolde e:
+    ecrire(e.message, e.manque, texte(e))
+attraper e:
+    ecrire("autre")
+fin
+essayer:
+    lever "simple"
+attraper ErreurSolde e:
+    ecrire("non")
+attraper e:
+    ecrire("générique :", e.message)
+fin
+"""
+    assert run(src) == "insuffisant 5 ErreurSolde : insuffisant\ngénérique : simple\n"
+
+
+def test_erreur_non_attrapee_et_propagation():
+    with pytest.raises(ErreurExecution, match="erreur non attrapée : boum") as exc:
+        run('fonction f(): lever "boum"\nf()')
+    assert exc.value.ligne == 1
+    with pytest.raises(ErreurExecution, match="non attrapée"):
+        run('essayer:\n    lever "x"\nattraper e:\n    lever e\nfin')
+
+
+def test_retourner_et_arreter_dans_essayer():
+    src = """
+fonction f() -> entier:
+    essayer:
+        retourner 1
+    enfin:
+        ecrire("enfin")
+    fin
+fin
+ecrire(f())
+pour i dans 10:
+    essayer:
+        si (i == 2): arreter
+    attraper e:
+        ecrire("non")
+    fin
+    ecrire(i)
+fin
+"""
+    assert run(src) == "enfin\n1\n0\n1\n"
+
+
+def test_erreurs_statiques_gestion_erreurs():
+    with pytest.raises(ErreurType, match="lever"):
+        compiler_source("lever 3")
+    with pytest.raises(ErreurType, match="héritant de Erreur"):
+        compiler_source("essayer:\n    ecrire(1)\nattraper entier e:\n    ecrire(2)\nfin")
+    with pytest.raises(ErreurSyntaxe, match="au moins un"):
+        compiler_source("essayer:\n    ecrire(1)\nfin")
+    with pytest.raises(ErreurType, match="doit retourner"):
+        compiler_source("fonction f() -> entier:\n    essayer:\n        retourner 1\n    attraper e:\n        ecrire(e.message)\n    fin\nfin")
+
+
+def test_exemple_erreurs():
+    source = (RACINE / "exemples" / "erreurs.nck").read_text(encoding="utf-8")
+    assert "solde final : 70" in run(source)

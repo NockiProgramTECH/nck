@@ -113,6 +113,19 @@ Erreur de type : impossible d'affecter un texte à une cible de type entier
 La référence complète (types, opérateurs, fonctions natives…) est dans [`docs/LANGAGE.md`](docs/LANGAGE.md).
 D'autres programmes se trouvent dans [`exemples/`](exemples/).
 
+## Coloration syntaxique (VS Code)
+
+Une extension minimale se trouve dans [`editeurs/vscode/`](editeurs/vscode/). Pour l'installer :
+
+```bash
+# Linux / macOS
+cp -r editeurs/vscode ~/.vscode/extensions/nck-lang
+# Windows (PowerShell)
+Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang"
+```
+
+puis redémarrez VS Code : les fichiers `.nck` sont colorés, et les commentaires / blocs / parenthèses sont gérés.
+
 ## Structure du projet
 
 ```
@@ -142,6 +155,6 @@ pytest
 
 - [x] v0.1 — moteur Python : lexeur, parseur, vérificateur de types, interpréteur, REPL
 - [x] v0.2 — classes typées avec validation (`classe`, `herite`, `soi`, `valider`)
+- [x] v0.3 — gestion des erreurs (`essayer` / `attraper` / `enfin` / `lever`), extension VS Code
 - [ ] dictionnaires, `importer` de modules `.nck`
-- [ ] extension VS Code (coloration syntaxique)
 - [ ] réécriture du moteur en C une fois la syntaxe stabilisée

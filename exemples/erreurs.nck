@@ -1,0 +1,52 @@
+// Gestion des erreurs : essayer / attraper / enfin / lever
+
+fonction diviser(a: entier, b: entier) -> reel:
+    si (b == 0): lever "division de " + texte(a) + " par zéro impossible"
+    retourner a / b
+fin
+
+essayer:
+    ecrire(diviser(10, 2))
+    ecrire(diviser(1, 0))
+    ecrire("jamais affiché")
+attraper e:
+    ecrire("Problème :", e.message)
+enfin:
+    ecrire("(nettoyage)")
+fin
+
+// Les erreurs d'exécution du langage sont aussi attrapables
+essayer:
+    variable l = [1, 2, 3]
+    ecrire(l[10])
+attraper e:
+    ecrire("Attrapée :", e.message)
+fin
+
+// Ses propres classes d'erreur, avec des champs supplémentaires
+classe ErreurSolde herite Erreur:
+    manque: entier
+fin
+
+classe Compte:
+    solde: entier = 0
+
+    fonction retirer(montant: entier):
+        si (montant > soi.solde): lever ErreurSolde("solde insuffisant", montant - soi.solde)
+        soi.solde -= montant
+    fin
+fin
+
+variable c = Compte(100)
+essayer:
+    c.retirer(30)
+    c.retirer(100)
+attraper ErreurSolde e:                 // n'attrape que ce type d'erreur
+    ecrire(e.message, "- il manque", e.manque, "F")
+attraper e:
+    ecrire("autre erreur :", e.message)
+fin
+ecrire("solde final :", c.solde)
+
+// Une erreur non attrapée arrête le programme avec un message clair :
+// lever ErreurSolde("plus rien", 10)

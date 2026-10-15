@@ -1,9 +1,9 @@
 """Analyseur syntaxique : transforme les jetons en arbre syntaxique."""
 
 from .arbre import (
-    Affectation, Appel, Arreter, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
-    DeclVariable, ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique,
-    Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
+    Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
+    DeclVariable, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral,
+    Logique, Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurSyntaxe
 from .lexeur import Jeton, lexer
@@ -88,7 +88,7 @@ class Parseur:
             return
         if j.genre in ("nl", "fin_fichier"):
             return
-        if j.genre == "motcle" and j.valeur in ("fin", "sinon"):
+        if j.genre == "motcle" and j.valeur in ("fin", "sinon", "attraper", "enfin"):
             return
         raise self.erreur(f"fin d'instruction attendue, mais {self._decrire(j)} trouvé", j)
 
@@ -138,6 +138,15 @@ class Parseur:
                 return self.decl_classe()
             if mot == "si":
                 return self.instr_si()
+            if mot == "essayer":
+                return self.instr_essayer()
+            if mot == "lever":
+                self.avancer()
+                valeur = self.expression()
+                self.fin_instruction()
+                return Lever(valeur, ligne=j.ligne, colonne=j.colonne)
+            if mot in ("attraper", "enfin"):
+                raise self.erreur(f"'{mot}' inattendu : il doit suivre un bloc 'essayer:'")
             if mot == "tantque":
                 return self.instr_tantque()
             if mot == "pour":
@@ -147,7 +156,7 @@ class Parseur:
                 valeur = None
                 nxt = self.jetons[self.pos]
                 if not (nxt.genre in ("nl", "fin_fichier") or (nxt.genre == "op" and nxt.valeur == ";")
-                        or (nxt.genre == "motcle" and nxt.valeur in ("fin", "sinon"))):
+                        or (nxt.genre == "motcle" and nxt.valeur in ("fin", "sinon", "attraper", "enfin"))):
                     valeur = self.expression()
                 self.fin_instruction()
                 return Retourner(valeur, ligne=j.ligne, colonne=j.colonne)
@@ -299,6 +308,34 @@ class Parseur:
         if multi:
             self.attendre_motcle("fin")
         return bloc
+
+    def instr_essayer(self) -> Essayer:
+        mot = self.avancer()
+        self.attendre_op(":", "':' attendu après 'essayer'")
+        corps = self.bloc_jusqua("attraper", "enfin", "fin")
+        clauses: list[Attraper] = []
+        while self.est_motcle("attraper"):
+            ja = self.avancer()
+            # `attraper e:` ou `attraper TypeErreur e:`
+            premier = self.attendre_ident("nom de la variable d'erreur attendu après 'attraper' (ex : attraper e:)")
+            type_annot = None
+            if self.est("ident"):
+                type_annot = TypeAnnot(premier.valeur, ligne=premier.ligne, colonne=premier.colonne)
+                var = self.avancer()
+            else:
+                var = premier
+            self.attendre_op(":", f"':' attendu après 'attraper {var.valeur}'")
+            bloc = self.bloc_jusqua("attraper", "enfin", "fin")
+            clauses.append(Attraper(var.valeur, type_annot, bloc, ligne=ja.ligne, colonne=ja.colonne))
+        enfin = None
+        if self.est_motcle("enfin"):
+            self.avancer()
+            self.attendre_op(":", "':' attendu après 'enfin'")
+            enfin = self.bloc_jusqua("fin")
+        if not clauses and enfin is None:
+            raise self.erreur("un bloc 'essayer' doit avoir au moins un 'attraper' ou un 'enfin'", mot)
+        self.attendre_motcle("fin")
+        return Essayer(corps, clauses, enfin, ligne=mot.ligne, colonne=mot.colonne)
 
     def instr_tantque(self) -> TantQue:
         mot = self.avancer()

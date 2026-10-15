@@ -154,6 +154,25 @@ class DeclClasse(Noeud):
 
 
 @dataclass
+class Attraper(Noeud):
+    variable: str
+    type_annot: Optional[TypeAnnot]      # par défaut : Erreur
+    corps: Bloc
+
+
+@dataclass
+class Essayer(Noeud):
+    corps: Bloc
+    clauses: list[Attraper]
+    enfin: Optional[Bloc]
+
+
+@dataclass
+class Lever(Noeud):
+    valeur: Expr
+
+
+@dataclass
 class Retourner(Noeud):
     valeur: Optional[Expr]
 
@@ -169,7 +188,7 @@ class Continuer(Noeud):
 
 
 Instr = (DeclVariable | Affectation | ExprInstr | Bloc | Si | TantQue | Pour
-         | DeclFonction | DeclClasse | Retourner | Arreter | Continuer)
+         | DeclFonction | DeclClasse | Essayer | Lever | Retourner | Arreter | Continuer)
 
 
 @dataclass

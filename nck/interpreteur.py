@@ -9,8 +9,8 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    ExprInstr, Expr, Identifiant, Index, Instr, ListeLit, Litteral, Logique, Membre, Pour,
-    Programme, Retourner, Si, TantQue, Unaire,
+    Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    Pour, Programme, Retourner, Si, TantQue, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .natifs import NATIFS, ClasseNck, FonctionNck, ObjetNck, nom_type_valeur, vers_texte
@@ -32,6 +32,34 @@ class _Arret(Exception):
 
 class _Continue(Exception):
     pass
+
+
+class Levee(Exception):
+    """Erreur levée par `lever` (ou convertie depuis une erreur d'exécution) : transporte un objet Erreur."""
+
+    def __init__(self, objet: ObjetNck, ligne: int = 0, colonne: int = 0):
+        super().__init__(objet.champs.get("message"))
+        self.objet = objet
+        self.ligne = ligne
+        self.colonne = colonne
+
+
+def fabriquer_classe_erreur() -> ClasseNck:
+    classe = ClasseNck("Erreur", ())
+    classe.champs = ["message"]
+    classe.types_champs = {"message": TEXTE}
+
+    def construire(*args, **nommes):
+        valeurs = dict(zip(classe.champs, args))
+        valeurs.update(nommes)
+        if "message" not in valeurs:
+            raise ErreurExecution("il manque le champ obligatoire 'message' pour créer une 'Erreur'")
+        if not isinstance(valeurs["message"], str):
+            raise ErreurExecution(f"champ 'message' de 'Erreur' : texte attendu, mais {nom_type_valeur(valeurs['message'])} reçu")
+        return ObjetNck(classe, {"message": valeurs["message"]})
+
+    classe.construire = construire
+    return classe
 
 
 # ---------- environnement ----------
@@ -71,6 +99,8 @@ class Interpreteur:
         self.global_env = Env()
         for nom, natif in NATIFS.items():
             self.global_env.vars[nom] = natif
+        self.classe_erreur = fabriquer_classe_erreur()
+        self.global_env.vars["Erreur"] = self.classe_erreur
 
     def erreur(self, message: str, noeud) -> ErreurExecution:
         return ErreurExecution(message, noeud.ligne, noeud.colonne, self.fichier)
@@ -83,6 +113,12 @@ class Interpreteur:
         sys.setrecursionlimit(max(ancienne_limite, self.limite_recursion * 6))
         try:
             corps(self.global_env)
+        except Levee as l:
+            o = l.objet
+            nom = o.classe.nom
+            message = vers_texte(o) if "texte" in o.classe.methodes else o.champs.get("message", "")
+            raise ErreurExecution(f"{nom} non attrapée : {message}" if nom != "Erreur" else f"erreur non attrapée : {message}",
+                                  l.ligne, l.colonne, self.fichier) from None
         except RecursionError:
             raise ErreurExecution("récursion trop profonde (dépassement de pile)", 0, 0, self.fichier) from None
         finally:
@@ -396,6 +432,49 @@ class Interpreteur:
         def ret(env):
             raise _Retour(val(env))
         return ret
+
+    def i_Lever(self, l: Lever) -> Fn:
+        val = self.expression(l.valeur)
+        classe_erreur = self.classe_erreur
+        ligne, colonne = l.ligne, l.colonne
+        erreur = self.erreur
+
+        def lever(env):
+            v = val(env)
+            if isinstance(v, str):
+                v = ObjetNck(classe_erreur, {"message": v})
+            elif not (isinstance(v, ObjetNck) and (v.classe.nom == "Erreur" or "Erreur" in v.classe.ancetres)):
+                raise erreur(f"'lever' attend un texte ou une Erreur, mais {nom_type_valeur(v)} fourni", l)
+            raise Levee(v, ligne, colonne)
+        return lever
+
+    def i_Essayer(self, e: Essayer) -> Fn:
+        corps = self.compiler_instructions(e.corps.instructions)
+        clauses = [(cl.type.nom, cl.variable, self.compiler_instructions(cl.corps.instructions))  # type: ignore[attr-defined]
+                   for cl in e.clauses]
+        enfin = self.compiler_instructions(e.enfin.instructions) if e.enfin is not None else None
+        classe_erreur = self.classe_erreur
+
+        def attraper(env, objet: ObjetNck, exc: BaseException):
+            for nom_type, var, bloc in clauses:
+                if objet.classe.nom == nom_type or nom_type in objet.classe.ancetres:
+                    env.vars[var] = objet
+                    bloc(env)
+                    return
+            raise exc
+
+        def essayer(env):
+            try:
+                try:
+                    corps(env)
+                except Levee as l:
+                    attraper(env, l.objet, l)
+                except ErreurExecution as ex:
+                    attraper(env, ObjetNck(classe_erreur, {"message": ex.message}), ex)
+            finally:
+                if enfin is not None:
+                    enfin(env)
+        return essayer
 
     def i_Arreter(self, a: Arreter) -> Fn:
         def arreter(env):
@@ -711,10 +790,20 @@ def _contient_controle(bloc: Bloc) -> bool:
                             return True
                     elif visiter(i.sinon.instructions):
                         return True
+            elif isinstance(i, Essayer) and _visiter_essayer(i, visiter):
+                return True
             elif isinstance(i, Bloc) and visiter(i.instructions):
                 return True
         return False
     return visiter(bloc.instructions)
+
+
+def _visiter_essayer(e: Essayer, visiter) -> bool:
+    if visiter(e.corps.instructions):
+        return True
+    if any(visiter(cl.corps.instructions) for cl in e.clauses):
+        return True
+    return e.enfin is not None and visiter(e.enfin.instructions)
 
 
 def _contient_retour(bloc: Bloc) -> bool:
@@ -734,6 +823,8 @@ def _contient_retour(bloc: Bloc) -> bool:
             elif isinstance(i, (TantQue, Pour)):
                 if visiter(i.corps.instructions):
                     return True
+            elif isinstance(i, Essayer) and _visiter_essayer(i, visiter):
+                return True
             elif isinstance(i, Bloc) and visiter(i.instructions):
                 return True
         return False
