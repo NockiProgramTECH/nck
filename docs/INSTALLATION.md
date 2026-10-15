@@ -120,11 +120,16 @@ pip install pyinstaller
 python installateur/construire.py        # → dist/nck/ + dist/nck-<version>-<os>-<arch>.tar.gz|zip
 ```
 
-Windows, en plus (avec [Inno Setup 6](https://jrsoftware.org/isinfo.php)) :
+Windows, pour l'assistant `NCK-Setup.exe` — **un seul script** qui construit l'exécutable, installe Inno Setup s'il manque (via `winget`) et compile :
 
 ```powershell
-iscc /DVersion=0.12.0 installateur\windows\nck.iss   # → dist\NCK-Setup-0.12.0.exe
+powershell -ExecutionPolicy Bypass -File installateur\windows\construire_setup.ps1   # → dist\NCK-Setup-0.12.0.exe
 ```
+
+> `iscc` n'est **pas** une commande fournie par Windows : elle vient d'[Inno Setup 6](https://jrsoftware.org/isdl.php)
+> (`winget install JRSoftware.InnoSetup`). Après installation, elle n'est pas dans le PATH ; appelez-la par son chemin complet :
+> `& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DVersion=0.12.0 installateur\windows\nck.iss`
+> — ou laissez simplement GitHub Actions le faire (voir « Publier une version »).
 
 Fichiers concernés :
 
@@ -134,6 +139,7 @@ Fichiers concernés :
 | `installateur/lanceur.py` | point d'entrée de l'exécutable |
 | `installateur/construire.py` | construit puis archive `dist/nck/` |
 | `installateur/windows/nck.iss` | assistant Windows (PATH, associations, menu contextuel, extension VS Code) |
+| `installateur/windows/construire_setup.ps1` | construit l'exécutable puis `NCK-Setup.exe` (installe Inno Setup au besoin) |
 | `installateur/installer.sh`, `installer.ps1` | installateurs en ligne de commande |
 | `.github/workflows/release.yml` | à chaque tag `vX.Y.Z` : construit pour les 5 plateformes et publie la Release |
 
