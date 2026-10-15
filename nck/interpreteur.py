@@ -9,12 +9,16 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Si, TantQue, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
 from .natifs import NATIFS, ClasseNck, FonctionNck, ObjetNck, nom_type_valeur, vers_texte
-from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, est_liste, valeur_compatible
+from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, est_dico, est_liste, valeur_compatible
+
+
+def _repr_cle(k) -> str:
+    return '"' + k + '"' if isinstance(k, str) else vers_texte(k)
 
 
 # ---------- signaux de contrôle ----------
@@ -227,9 +231,26 @@ class Interpreteur:
         index = self.expression(a.cible.index)
         noeud = a.cible
 
+        if est_dico(a.cible.cible.type):  # type: ignore[attr-defined]
+            if op == "=":
+                def aff_cle(env):
+                    conteneur(env)[index(env)] = val(env)
+                return aff_cle
+            binop = self.operateur_binaire(op[0], a, a.cible.type, a.valeur.type)  # type: ignore[attr-defined]
+
+            def aff_cle_composee(env):
+                d = conteneur(env)
+                k = index(env)
+                if k not in d:
+                    raise self.erreur(f"clé {_repr_cle(k)} introuvable dans le dictionnaire", noeud.index)
+                d[k] = binop(d[k], val(env))
+            return aff_cle_composee
+
         def indexer(env):
             c = conteneur(env)
             i = index(env)
+            if isinstance(c, dict):
+                return c, i
             if not isinstance(c, list):
                 raise self.erreur(f"impossible de modifier un élément d'un {nom_type_valeur(c)}", noeud)
             if not isinstance(i, int) or isinstance(i, bool):
@@ -302,6 +323,8 @@ class Interpreteur:
 
         def obtenir(env):
             it = iterable(env)
+            if isinstance(it, dict):
+                return list(it)          # copie : le corps peut modifier le dictionnaire
             if isinstance(it, bool) or not isinstance(it, (list, str, int)):
                 raise self.erreur(f"impossible de parcourir un {nom_type_valeur(it)}", noeud)
             return range(it) if isinstance(it, int) else it
@@ -499,6 +522,10 @@ class Interpreteur:
         elems = [self.expression(x) for x in l.elements]
         return lambda env: [f(env) for f in elems]
 
+    def e_DicoLit(self, d: DicoLit) -> Fn:
+        entrees = [(self.expression(k), self.expression(v)) for k, v in d.entrees]
+        return lambda env: {k(env): v(env) for k, v in entrees}
+
     def e_Identifiant(self, i: Identifiant) -> Fn:
         nom = i.nom
 
@@ -641,6 +668,13 @@ class Interpreteur:
         def indexer(env):
             c = cible(env)
             k = index(env)
+            if isinstance(c, dict):
+                try:
+                    return c[k]
+                except KeyError:
+                    raise erreur(f"clé {_repr_cle(k)} introuvable dans le dictionnaire", i.index) from None
+                except TypeError:
+                    raise erreur(f"une clé de dictionnaire ne peut pas être un {nom_type_valeur(k)}", i.index) from None
             if not isinstance(c, (list, str)):
                 raise erreur(f"impossible d'indexer un {nom_type_valeur(c)}", i)
             if isinstance(k, bool) or not isinstance(k, int):

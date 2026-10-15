@@ -43,6 +43,8 @@ RIEN = Type("rien")
 NUL = Type("nul")
 QUELCONQUE = Type("quelconque")
 LISTE_VIDE = Type("liste", (Type("?"),))   # type d'un littéral [] : compatible avec toute liste
+DICO_VIDE = Type("dico", (Type("?"), Type("?")))   # type d'un littéral {}
+TYPES_CLES = (ENTIER, TEXTE, BOOLEEN)      # types autorisés comme clés de dictionnaire
 
 TYPES_SIMPLES = {
     "entier": ENTIER, "reel": REEL, "texte": TEXTE, "booleen": BOOLEEN,
@@ -65,6 +67,28 @@ def element_de(t: Type) -> Type:
     return QUELCONQUE
 
 
+def dico_de(k: Type, v: Type) -> Type:
+    return Type("dico", (k, v))
+
+
+def est_dico(t: Type) -> bool:
+    return t.nom == "dico"
+
+
+def cle_de(t: Type) -> Type:
+    if est_dico(t):
+        k = t.params[0]
+        return QUELCONQUE if k.nom == "?" else k
+    return QUELCONQUE
+
+
+def valeur_de(t: Type) -> Type:
+    if est_dico(t):
+        v = t.params[1]
+        return QUELCONQUE if v.nom == "?" else v
+    return QUELCONQUE
+
+
 def est_numerique(t: Type) -> bool:
     return t in (ENTIER, REEL)
 
@@ -83,6 +107,10 @@ def compatible(source: Type, cible: Type) -> bool:
         if source.params[0].nom == "?" or cible.params[0].nom == "?":
             return True
         return compatible(source.params[0], cible.params[0])
+    if est_dico(source) and est_dico(cible):
+        if source == DICO_VIDE or cible == DICO_VIDE:
+            return True
+        return (compatible(source.params[0], cible.params[0]) and compatible(source.params[1], cible.params[1]))
     if isinstance(source, TypeClasse) and isinstance(cible, TypeClasse):
         return source.herite_de(cible.nom)
     if isinstance(source, TypeFonction) and isinstance(cible, TypeFonction):
@@ -110,6 +138,12 @@ def unifier(a: Type, b: Type) -> Type:
         if b.params[0].nom == "?":
             return a
         return liste_de(unifier(element_de(a), element_de(b)))
+    if est_dico(a) and est_dico(b):
+        if a == DICO_VIDE:
+            return b
+        if b == DICO_VIDE:
+            return a
+        return dico_de(unifier(cle_de(a), cle_de(b)), unifier(valeur_de(a), valeur_de(b)))
     return QUELCONQUE
 
 
@@ -127,6 +161,8 @@ def type_runtime(v: object) -> Type:
         return TEXTE
     if isinstance(v, list):
         return liste_de(QUELCONQUE)
+    if isinstance(v, dict):
+        return dico_de(QUELCONQUE, QUELCONQUE)
     return QUELCONQUE
 
 
@@ -151,6 +187,13 @@ def valeur_compatible(v: object, t: Type) -> bool:
         if elem == QUELCONQUE:
             return True
         return all(valeur_compatible(x, elem) for x in v)
+    if est_dico(t):
+        if not isinstance(v, dict):
+            return False
+        k, val = cle_de(t), valeur_de(t)
+        if k == QUELCONQUE and val == QUELCONQUE:
+            return True
+        return all(valeur_compatible(a, k) and valeur_compatible(b, val) for a, b in v.items())
     if isinstance(t, TypeFonction):
         return callable(v)
     if isinstance(t, TypeClasse):

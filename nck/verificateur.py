@@ -2,14 +2,15 @@
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
 from .natifs import NATIFS
 from .types_nck import (
-    BOOLEEN, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_SIMPLES,
-    Type, TypeClasse, TypeFonction, compatible, element_de, est_liste, est_numerique, liste_de, unifier,
+    BOOLEEN, DICO_VIDE, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_CLES, TYPES_SIMPLES,
+    Type, TypeClasse, TypeFonction, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
+    est_numerique, liste_de, unifier, valeur_de,
 )
 
 TYPE_META_CLASSE = Type("classe")   # type du symbole qui désigne une classe (ex : `Personne`)
@@ -98,6 +99,16 @@ class Verificateur:
             if len(annot.params) != 1:
                 raise self.erreur("'liste' prend exactement un paramètre, ex : liste<entier>", annot)
             return liste_de(self.resoudre_type(annot.params[0]))
+        if nom == "dico":
+            if len(annot.params) == 0:
+                return dico_de(QUELCONQUE, QUELCONQUE)
+            if len(annot.params) != 2:
+                raise self.erreur("'dico' prend deux paramètres, ex : dico<texte, entier>", annot)
+            k = self.resoudre_type(annot.params[0])
+            if k not in TYPES_CLES and k != QUELCONQUE:
+                raise self.erreur(f"une clé de dictionnaire doit être un texte, un entier ou un booleen, pas un {k}",
+                                  annot.params[0])
+            return dico_de(k, self.resoudre_type(annot.params[1]))
         if nom in self.classes:
             if annot.params:
                 raise self.erreur(f"la classe '{nom}' ne prend pas de paramètre de type", annot)
@@ -110,6 +121,7 @@ class Verificateur:
         suggestion = {
             "int": "entier", "float": "reel", "str": "texte", "string": "texte", "bool": "booleen",
             "number": "reel", "void": "rien", "any": "quelconque", "list": "liste", "chaine": "texte",
+            "dict": "dico", "map": "dico", "dictionnaire": "dico", "object": "dico ou classe",
             "nombre": "entier ou reel", "double": "reel",
         }.get(nom.lower())
         aide = f" (vouliez-vous dire '{suggestion}' ?)" if suggestion else ""
@@ -247,7 +259,12 @@ class Verificateur:
             if t_annot is None:
                 if t_val == NUL:
                     raise self.erreur(f"impossible de déduire le type de '{d.nom}' depuis 'nul' : précisez le type", d)
-                t_annot = liste_de(QUELCONQUE) if t_val == LISTE_VIDE else t_val
+                if t_val == LISTE_VIDE:
+                    t_annot = liste_de(QUELCONQUE)
+                elif t_val == DICO_VIDE:
+                    t_annot = dico_de(QUELCONQUE, QUELCONQUE)
+                else:
+                    t_annot = t_val
             elif not compatible(t_val, t_annot):
                 raise self.erreur(f"'{d.nom}' est de type {t_annot}, mais reçoit un {t_val}", d.valeur)
             d.verif_runtime = (t_val == QUELCONQUE and t_annot != QUELCONQUE)  # type: ignore[attr-defined]
@@ -326,6 +343,8 @@ class Verificateur:
             t_var = TEXTE
         elif est_liste(t_it):
             t_var = element_de(t_it)
+        elif est_dico(t_it):
+            t_var = cle_de(t_it)       # on parcourt les clés
         elif t_it == QUELCONQUE:
             t_var = QUELCONQUE
         elif t_it == ENTIER:
@@ -457,6 +476,21 @@ class Verificateur:
             raise self.erreur("une liste ne peut pas contenir de valeurs 'rien' ou 'nul'", l)
         return liste_de(t)
 
+    def e_DicoLit(self, d: DicoLit) -> Type:
+        if not d.entrees:
+            return DICO_VIDE
+        tk = tv = None
+        for cle, val in d.entrees:
+            k = self.expression(cle)
+            if k not in TYPES_CLES and k != QUELCONQUE:
+                raise self.erreur(f"une clé de dictionnaire doit être un texte, un entier ou un booleen, pas un {k}", cle)
+            v = self.expression(val)
+            if v == RIEN or v == NUL:
+                raise self.erreur("un dictionnaire ne peut pas contenir de valeurs 'rien' ou 'nul'", val)
+            tk = k if tk is None else unifier(tk, k)
+            tv = v if tv is None else unifier(tv, v)
+        return dico_de(tk, tv)
+
     def e_Identifiant(self, i: Identifiant) -> Type:
         sym = self.portee.chercher(i.nom)
         if sym is None:
@@ -534,6 +568,10 @@ class Verificateur:
     def e_Index(self, i: Index) -> Type:
         tc = self.expression(i.cible)
         ti = self.expression(i.index)
+        if est_dico(tc):
+            if not compatible(ti, cle_de(tc)):
+                raise self.erreur(f"la clé doit être un {cle_de(tc)}, mais c'est un {ti}", i.index)
+            return valeur_de(tc)
         if ti != ENTIER and ti != QUELCONQUE:
             raise self.erreur(f"l'index doit être un entier, mais c'est un {ti}", i.index)
         if tc == TEXTE:

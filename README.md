@@ -54,13 +54,15 @@ nck                          # mode interactif
 ## Aperçu du langage
 
 ```
-// Types : entier, reel, texte, booleen, liste<T>, fonction<...>, quelconque
+// Types : entier, reel, texte, booleen, liste<T>, dico<K, V>, fonction<...>, quelconque
 variable age: entier = 25
 variable prix = 19.99                       // reel déduit
 variable fruits: liste<texte> = ["mangue", "banane"]
+variable ages: dico<texte, entier> = {"Awa": 20}
 constante PI = 3.14159
 
 ajouter(fruits, "papaye")
+ages["Ali"] = 25
 pour fruit dans fruits:
     ecrire("-", majuscule(fruit))
 fin
@@ -156,5 +158,6 @@ pytest
 - [x] v0.1 — moteur Python : lexeur, parseur, vérificateur de types, interpréteur, REPL
 - [x] v0.2 — classes typées avec validation (`classe`, `herite`, `soi`, `valider`)
 - [x] v0.3 — gestion des erreurs (`essayer` / `attraper` / `enfin` / `lever`), extension VS Code
-- [ ] dictionnaires, `importer` de modules `.nck`
+- [x] v0.4 — dictionnaires `dico<K, V>`
+- [ ] `importer` de modules `.nck`, bibliothèque standard (fichiers, JSON, dates)
 - [ ] réécriture du moteur en C une fois la syntaxe stabilisée

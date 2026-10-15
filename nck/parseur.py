@@ -2,7 +2,7 @@
 
 from .arbre import (
     Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
-    DeclVariable, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral,
+    DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral,
     Logique, Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurSyntaxe
@@ -504,6 +504,24 @@ class Parseur:
             self.profondeur -= 1
             self.attendre_op("]", "']' attendu pour fermer la liste")
             return ListeLit(elements, ligne=j.ligne, colonne=j.colonne)
+        if j.genre == "op" and j.valeur == "{":
+            self.avancer()
+            self.profondeur += 1
+            entrees: list[tuple[Expr, Expr]] = []
+            if not self.est_op("}"):
+                while True:
+                    cle = self.expression()
+                    self.attendre_op(":", "':' attendu entre la clé et la valeur du dictionnaire")
+                    entrees.append((cle, self.expression()))
+                    if self.est_op(","):
+                        self.avancer()
+                        if self.est_op("}"):
+                            break
+                        continue
+                    break
+            self.profondeur -= 1
+            self.attendre_op("}", "'}' attendu pour fermer le dictionnaire")
+            return DicoLit(entrees, ligne=j.ligne, colonne=j.colonne)
         raise self.erreur(f"expression attendue, mais {self._decrire(j)} trouvé")
 
 

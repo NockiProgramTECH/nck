@@ -48,8 +48,9 @@ Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instruct
 | `texte`            | `"bonjour"`, `'ok'`              | chaîne de caractères (UTF-8)             |
 | `booleen`          | `vrai`, `faux`                   | valeur logique                           |
 | `liste<T>`         | `[1, 2, 3]`, `liste<texte>`      | liste d'éléments de type `T`             |
+| `dico<K, V>`       | `{"a": 1}`, `dico<texte, entier>` | dictionnaire clé → valeur (clé : `texte`, `entier` ou `booleen`) |
 | `fonction<A, B, R>`| `fonction<entier, entier, entier>` | fonction prenant `A, B` et renvoyant `R` |
-| `NomDeClasse`      | `Personne`                       | instance d'une classe (voir §9)          |
+| `NomDeClasse`      | `Personne`                       | instance d'une classe (voir §10)          |
 | `quelconque`       | —                                | n'importe quelle valeur (vérifiée à l'exécution) |
 | `rien`             | —                                | type de retour d'une fonction sans valeur |
 | `nul`              | `nul`                            | absence de valeur                        |
@@ -120,7 +121,27 @@ pour lettre dans "nck":           // caractères d'un texte
 
 `arreter` sort de la boucle, `continuer` passe à l'itération suivante.
 
-## 8. Fonctions
+## 8. Dictionnaires
+
+```
+variable ages: dico<texte, entier> = {"Awa": 20, "Ali": 25}
+ages["Issa"] = 22                     // ajout ou modification
+ages["Awa"] += 1
+ecrire(ages["Ali"])                   // 25 ; erreur d'exécution si la clé n'existe pas
+ecrire(obtenir(ages, "Zoe", 0))       // 0 : valeur par défaut si la clé est absente
+ecrire(contient(ages, "Awa"), longueur(ages))
+
+pour nom dans ages:                   // parcourt les clés
+    ecrire(nom, ages[nom])
+fin
+ecrire(cles(ages), valeurs(ages))
+```
+
+- Les clés doivent être des `texte`, `entier` ou `booleen` ; les valeurs peuvent être de n'importe quel type.
+- `{}` crée un dictionnaire vide ; sans annotation, son type est `dico<quelconque, quelconque>`.
+- Les dictionnaires gardent l'ordre d'insertion et sont passés par référence.
+
+## 9. Fonctions
 
 ```
 fonction additionner(a: entier, b: entier) -> entier:
@@ -145,7 +166,7 @@ fonction double(n: entier) -> entier: retourner n * 2
 ecrire(appliquer(double, 21))   // 42
 ```
 
-## 9. Classes (programmation orientée objet)
+## 10. Classes (programmation orientée objet)
 
 Une classe regroupe des **champs typés** (avec valeur par défaut facultative) et des **méthodes**.
 Le constructeur est généré automatiquement à partir des champs, comme avec Pydantic.
@@ -199,7 +220,7 @@ variable groupe: liste<Personne> = [awa, issa] // un Etudiant est une Personne
 
 La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas redéclarer un champ du parent.
 
-## 10. Gestion des erreurs
+## 11. Gestion des erreurs
 
 ```
 essayer:
@@ -233,7 +254,7 @@ fin
 Les clauses `attraper` sont testées dans l'ordre ; si aucune ne correspond, l'erreur continue de remonter.
 Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : ErreurSolde non attrapée : solde insuffisant`.
 
-## 11. Fonctions natives
+## 12. Fonctions natives
 
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
@@ -247,6 +268,10 @@ Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : Erreur
 - `contient(l, x)`, `position(l, x)` (−1 si absent), `tranche(l, debut, fin?)`
 - `trier(l)`, `inverser(l)`, `copier(l)`, `somme(l)`, `minimum(l)`, `maximum(l)`
 - `intervalle(fin)`, `intervalle(debut, fin, pas?)` → `liste<entier>`
+
+**Dictionnaires** (`dico<K, V>`)
+- `longueur(d)`, `contient(d, cle)`, `cles(d)` → `liste<K>`, `valeurs(d)` → `liste<V>`
+- `obtenir(d, cle, defaut)` → `V`, `retirer(d, cle)` → `V`, `copier(d)`, `fusionner(d1, d2)`
 
 **Textes**
 - `longueur(t)`, `majuscule(t)`, `minuscule(t)`, `nettoyer(t)`, `remplacer(t, ancien, nouveau)`
@@ -263,7 +288,7 @@ Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : Erreur
 - `horloge()` → secondes (chronométrage), `attendre(secondes)`, `quitter(code?)`
 - `verifier(condition, message?)` — stoppe le programme si la condition est fausse
 
-## 12. Erreurs
+## 13. Erreurs
 
 Trois familles, toutes avec ligne et colonne :
 
@@ -279,7 +304,7 @@ Erreur d'exécution : division par zéro
 
 Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moindre ligne.
 
-## 13. Mots réservés
+## 14. Mots réservés
 
 `variable constante fonction classe herite essayer attraper enfin lever retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
 

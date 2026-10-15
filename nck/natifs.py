@@ -9,8 +9,8 @@ from typing import Callable
 
 from .erreurs import ErreurExecution, ErreurType
 from .types_nck import (
-    BOOLEEN, ENTIER, QUELCONQUE, REEL, RIEN, TEXTE, Type, compatible, element_de,
-    est_liste, est_numerique, liste_de, unifier,
+    BOOLEEN, ENTIER, QUELCONQUE, REEL, RIEN, TEXTE, Type, cle_de, compatible, element_de,
+    est_dico, est_liste, est_numerique, liste_de, unifier, valeur_de,
 )
 
 
@@ -31,6 +31,8 @@ def vers_texte(v: object) -> str:
         return repr(v)
     if isinstance(v, list):
         return "[" + ", ".join(_repr_elem(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{_repr_elem(k)}: {_repr_elem(x)}" for k, x in v.items()) + "}"
     if isinstance(v, ObjetNck):
         if "texte" in v.classe.methodes:
             return str(v.classe.methodes["texte"](v))
@@ -65,6 +67,8 @@ def nom_type_valeur(v: object) -> str:
         return "texte"
     if isinstance(v, list):
         return "liste"
+    if isinstance(v, dict):
+        return "dico"
     if isinstance(v, (FonctionNck, Natif)):
         return "fonction"
     if isinstance(v, ObjetNck):
@@ -264,16 +268,16 @@ def _type_de(v):
 def _v_longueur(types, erreur):
     _arite("longueur", types, 1, 1, erreur)
     t = types[0]
-    if t != QUELCONQUE and t != TEXTE and not est_liste(t):
-        raise erreur(f"'longueur' attend une liste ou un texte, mais {t} fourni")
+    if t != QUELCONQUE and t != TEXTE and not est_liste(t) and not est_dico(t):
+        raise erreur(f"'longueur' attend une liste, un dico ou un texte, mais {t} fourni")
     return ENTIER
 
 
 @natif("longueur", _v_longueur)
 def _longueur(v):
-    if isinstance(v, (str, list)):
+    if isinstance(v, (str, list, dict)):
         return len(v)
-    raise ErreurExecution(f"'longueur' attend une liste ou un texte, mais {nom_type_valeur(v)} fourni")
+    raise ErreurExecution(f"'longueur' attend une liste, un dico ou un texte, mais {nom_type_valeur(v)} fourni")
 
 
 def _v_intervalle(types, erreur):
@@ -311,6 +315,10 @@ def _ajouter(l, v):
 
 def _v_retirer(types, erreur):
     _arite("retirer", types, 1, 2, erreur)
+    if est_dico(types[0]):
+        _arite("retirer", types, 2, 2, erreur)
+        _exiger("retirer", types[1], cle_de(types[0]), 2, erreur)
+        return valeur_de(types[0])
     _exiger_liste("retirer", types[0], 1, erreur)
     if len(types) == 2:
         _exiger("retirer", types[1], ENTIER, 2, erreur)
@@ -319,6 +327,11 @@ def _v_retirer(types, erreur):
 
 @natif("retirer", _v_retirer)
 def _retirer(l, i=-1):
+    if isinstance(l, dict):
+        try:
+            return l.pop(i)
+        except KeyError:
+            raise ErreurExecution(f"clé {_repr_elem(i)} introuvable dans le dictionnaire") from None
     if not isinstance(l, list):
         raise ErreurExecution(f"'retirer' attend une liste, mais {nom_type_valeur(l)} fourni")
     if not l:
@@ -349,14 +362,80 @@ def _v_contient(types, erreur):
     t = types[0]
     if t == TEXTE:
         _exiger("contient", types[1], TEXTE, 2, erreur)
+    elif est_dico(t):
+        _exiger("contient", types[1], cle_de(t), 2, erreur)
     elif t != QUELCONQUE and not est_liste(t):
-        raise erreur(f"'contient' attend une liste ou un texte, mais {t} fourni")
+        raise erreur(f"'contient' attend une liste, un dico ou un texte, mais {t} fourni")
     return BOOLEEN
 
 
 @natif("contient", _v_contient)
 def _contient(c, v):
-    return v in c
+    try:
+        return v in c
+    except TypeError:
+        return False
+
+
+# ---------- dictionnaires ----------
+
+def _v_dico1(nom, resultat):
+    def verifier(types, erreur):
+        _arite(nom, types, 1, 1, erreur)
+        t = types[0]
+        if t != QUELCONQUE and not est_dico(t):
+            raise erreur(f"'{nom}' attend un dico, mais {t} fourni")
+        return resultat(t)
+    return verifier
+
+
+@natif("cles", _v_dico1("cles", lambda t: liste_de(cle_de(t))))
+def _cles(d):
+    if not isinstance(d, dict):
+        raise ErreurExecution(f"'cles' attend un dico, mais {nom_type_valeur(d)} fourni")
+    return list(d.keys())
+
+
+@natif("valeurs", _v_dico1("valeurs", lambda t: liste_de(valeur_de(t))))
+def _valeurs(d):
+    if not isinstance(d, dict):
+        raise ErreurExecution(f"'valeurs' attend un dico, mais {nom_type_valeur(d)} fourni")
+    return list(d.values())
+
+
+def _v_obtenir(types, erreur):
+    _arite("obtenir", types, 2, 3, erreur)
+    t = types[0]
+    if t != QUELCONQUE and not est_dico(t):
+        raise erreur(f"'obtenir' attend un dico, mais {t} fourni")
+    _exiger("obtenir", types[1], cle_de(t), 2, erreur)
+    if len(types) == 3:
+        if not compatible(types[2], valeur_de(t)):
+            raise erreur(f"argument 3 de 'obtenir' : {valeur_de(t)} attendu, mais {types[2]} fourni")
+        return valeur_de(t)
+    return QUELCONQUE   # peut valoir nul si la clé est absente
+
+
+@natif("obtenir", _v_obtenir)
+def _obtenir(d, k, defaut=None):
+    if not isinstance(d, dict):
+        raise ErreurExecution(f"'obtenir' attend un dico, mais {nom_type_valeur(d)} fourni")
+    return d.get(k, defaut)
+
+
+def _v_fusionner(types, erreur):
+    _arite("fusionner", types, 2, 2, erreur)
+    for i, t in enumerate(types, 1):
+        if t != QUELCONQUE and not est_dico(t):
+            raise erreur(f"argument {i} de 'fusionner' : dico attendu, mais {t} fourni")
+    return unifier(types[0], types[1]) if est_dico(types[0]) and est_dico(types[1]) else QUELCONQUE
+
+
+@natif("fusionner", _v_fusionner)
+def _fusionner(a, b):
+    r = dict(a)
+    r.update(b)
+    return r
 
 
 def _v_position(types, erreur):
@@ -379,8 +458,10 @@ def _position(c, v):
         return -1
 
 
-def _v_liste_meme(types, erreur, nom):
+def _v_liste_meme(types, erreur, nom, dico_ok=False):
     _arite(nom, types, 1, 1, erreur)
+    if dico_ok and est_dico(types[0]):
+        return types[0]
     _exiger_liste(nom, types[0], 1, erreur)
     return types[0] if est_liste(types[0]) else liste_de(QUELCONQUE)
 
@@ -398,9 +479,9 @@ def _inverser(l):
     return l[::-1]
 
 
-@natif("copier", lambda t, e: _v_liste_meme(t, e, "copier"))
+@natif("copier", lambda t, e: _v_liste_meme(t, e, "copier", dico_ok=True))
 def _copier(l):
-    return list(l)
+    return dict(l) if isinstance(l, dict) else list(l)
 
 
 def _v_tranche(types, erreur):

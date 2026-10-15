@@ -31,6 +31,11 @@ class ListeLit(Noeud):
 
 
 @dataclass
+class DicoLit(Noeud):
+    entrees: list[tuple["Expr", "Expr"]]
+
+
+@dataclass
 class Identifiant(Noeud):
     nom: str
 
@@ -74,7 +79,7 @@ class Index(Noeud):
     index: "Expr"
 
 
-Expr = Litteral | ListeLit | Identifiant | Unaire | Binaire | Logique | Appel | Index | Membre
+Expr = Litteral | ListeLit | DicoLit | Identifiant | Unaire | Binaire | Logique | Appel | Index | Membre
 
 
 # ---------- Instructions ----------

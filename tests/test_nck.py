@@ -479,3 +479,55 @@ def test_erreurs_statiques_gestion_erreurs():
 def test_exemple_erreurs():
     source = (RACINE / "exemples" / "erreurs.nck").read_text(encoding="utf-8")
     assert "solde final : 70" in run(source)
+
+
+# ---------- dictionnaires ----------
+
+def test_dico_base():
+    src = """
+variable d: dico<texte, entier> = {"a": 1, "b": 2}
+d["c"] = 3
+d["a"] += 10
+ecrire(d, d["a"], longueur(d), contient(d, "b"), contient(d, "z"))
+ecrire(cles(d), valeurs(d), obtenir(d, "z", 0), retirer(d, "b"), d)
+pour k dans d: ecrire(k)
+"""
+    assert run(src) == ('{"a": 11, "b": 2, "c": 3} 11 3 vrai faux\n'
+                        '["a", "b", "c"] [11, 2, 3] 0 2 {"a": 11, "c": 3}\n'
+                        "a\nc\n")
+
+
+def test_dico_inference_et_vide():
+    assert run('variable d = {1: "x"}\nd[2] = "y"\necrire(d, type_de(d))') == '{1: "x", 2: "y"} dico\n'
+    assert run('variable d = {}\nd["a"] = 1\necrire(d)') == '{"a": 1}\n'
+    assert run('variable d: dico<texte, liste<entier>> = {}\nd["a"] = []\najouter(d["a"], 1)\necrire(d)') == '{"a": [1]}\n'
+
+
+def test_dico_erreurs_types():
+    D = 'variable d: dico<texte, entier> = {"a": 1}\n'
+    with pytest.raises(ErreurType, match="clé doit être un texte"):
+        compiler_source(D + "ecrire(d[3])")
+    with pytest.raises(ErreurType, match="texte à une cible de type entier"):
+        compiler_source(D + 'd["x"] = "vingt"')
+    with pytest.raises(ErreurType, match="clé de dictionnaire"):
+        compiler_source("variable d = {[1]: 2}")
+    with pytest.raises(ErreurType, match="dico<texte, entier>"):
+        compiler_source('variable d: dico<texte, entier> = {"a": "b"}')
+    with pytest.raises(ErreurType, match="vouliez-vous dire 'dico'"):
+        compiler_source("variable d: dict<texte, entier> = {}")
+    with pytest.raises(ErreurType, match="'cles' attend un dico"):
+        compiler_source("ecrire(cles(3))")
+
+
+def test_dico_erreurs_execution():
+    D = 'variable d: dico<texte, entier> = {"a": 1}\n'
+    with pytest.raises(ErreurExecution, match='clé "zoe" introuvable'):
+        run(D + 'ecrire(d["zoe"])')
+    with pytest.raises(ErreurExecution, match='clé "zoe" introuvable'):
+        run(D + 'd["zoe"] += 1')
+    assert run(D + 'essayer:\n    ecrire(d["z"])\nattraper e:\n    ecrire(e.message)\nfin') == 'clé "z" introuvable dans le dictionnaire\n'
+
+
+def test_exemple_dictionnaires():
+    source = (RACINE / "exemples" / "dictionnaires.nck").read_text(encoding="utf-8")
+    assert '{"le": 3, "chat": 1, "et": 2, "chien": 1, "rat": 1}' in run(source)

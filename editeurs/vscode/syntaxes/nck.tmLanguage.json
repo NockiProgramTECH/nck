@@ -74,7 +74,7 @@
     },
     "types": {
       "patterns": [
-        { "name": "support.type.primitive.nck", "match": "\\b(entier|reel|texte|booleen|liste|rien|quelconque)\\b" },
+        { "name": "support.type.primitive.nck", "match": "\\b(entier|reel|texte|booleen|liste|dico|rien|quelconque)\\b" },
         { "name": "support.class.nck", "match": "\\b(Erreur)\\b" },
         { "name": "entity.name.type.nck", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" }
       ]
@@ -89,7 +89,7 @@
     },
     "natifs": {
       "name": "support.function.builtin.nck",
-      "match": "\\b(ecrire|lire|texte|entier|reel|booleen|type_de|longueur|intervalle|ajouter|retirer|inserer|contient|position|trier|inverser|copier|tranche|somme|minimum|maximum|majuscule|minuscule|nettoyer|remplacer|decouper|joindre|commence_par|termine_par|caractere|code|absolu|racine|puissance|arrondir|plancher|plafond|division_entiere|aleatoire|horloge|attendre|quitter|verifier)(?=\\s*\\()"
+      "match": "\\b(ecrire|lire|texte|entier|reel|booleen|type_de|longueur|intervalle|ajouter|retirer|inserer|contient|position|trier|inverser|copier|tranche|somme|minimum|maximum|majuscule|minuscule|nettoyer|remplacer|decouper|joindre|commence_par|termine_par|caractere|code|absolu|racine|puissance|arrondir|plancher|plafond|division_entiere|aleatoire|horloge|attendre|quitter|verifier|cles|valeurs|obtenir|fusionner)(?=\\s*\\()"
     },
     "appels": {
       "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
