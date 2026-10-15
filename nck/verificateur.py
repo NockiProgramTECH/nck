@@ -29,16 +29,30 @@ class InfoClasse:
         self.champs: dict[str, Type] = {}
         self.defauts: set[str] = set()
         self.methodes: dict[str, TypeFonction] = {}
+        self.descriptions: dict[str, str] = {}             # membre -> signature / description
+        self.positions: dict[str, tuple[str, int, int]] = {}   # membre -> (fichier, ligne, colonne)
         self.prete = False
+
+    def signature(self) -> str:
+        params = []
+        for n, t in self.champs.items():
+            params.append(f"{n}: {t}" + (" = …" if n in self.defauts else ""))
+        base = f"classe {self.nom}" + (f" herite {self.parent.nom}" if self.parent else "")
+        return f"{base}({', '.join(params)})"
 
 
 class Symbole:
-    __slots__ = ("type", "constante", "initialisee")
+    __slots__ = ("type", "constante", "initialisee", "genre", "description", "position", "fichier")
 
-    def __init__(self, type_: Type, constante: bool = False, initialisee: bool = True):
+    def __init__(self, type_: Type, constante: bool = False, initialisee: bool = True,
+                 genre: str = "variable", description: str = "", position: tuple[int, int] = (0, 0), fichier: str = ""):
         self.type = type_
         self.constante = constante
         self.initialisee = initialisee
+        self.genre = genre                # variable, constante, fonction, classe, module, parametre, natif
+        self.description = description    # texte affiché au survol (signature…)
+        self.position = position          # (ligne, colonne) de la déclaration
+        self.fichier = fichier
 
 
 class Portee:
@@ -79,16 +93,21 @@ class Verificateur:
         self.profondeur_boucle = 0
         self.chargeur = chargeur if chargeur is not None else Chargeur()
         self.classes: dict[str, InfoClasse] = classes if classes is not None else {}
+        # Pour l'éditeur : liste de dicts {ligne, colonne, longueur, nom, symbole, genre}
+        self.enregistrements: list[dict] = []
+        self.pile_fonctions: list[tuple[int, int]] = []     # (ligne début, ligne fin) des fonctions englobantes
+        self.classe_courante: TypeClasse | None = None
         self.classe_fichier: dict[str, str] = {}   # nom de classe -> fichier qui la définit
         for nom in NATIFS:
-            self.portee.symboles[nom] = Symbole(Type("natif"), constante=True)
+            self.portee.symboles[nom] = Symbole(Type("natif"), constante=True, genre="natif")
         # Classe intégrée `Erreur` (base de toutes les erreurs levées / attrapées)
         if "Erreur" not in self.classes:
             erreur = InfoClasse("Erreur", TYPE_ERREUR, None, None)
             erreur.champs["message"] = TEXTE
             erreur.prete = True
             self.classes["Erreur"] = erreur
-        self.portee.symboles["Erreur"] = Symbole(TYPE_META_CLASSE, constante=True)
+        self.portee.symboles["Erreur"] = Symbole(TYPE_META_CLASSE, constante=True, genre="classe",
+                                                 description="classe Erreur(message: texte)")
 
     # ----- aides -----
 
@@ -142,10 +161,30 @@ class Verificateur:
         assert self.portee.parent is not None
         self.portee = self.portee.parent
 
-    def declarer(self, nom: str, type_: Type, noeud, constante: bool = False, initialisee: bool = True) -> None:
+    def declarer(self, nom: str, type_: Type, noeud, constante: bool = False, initialisee: bool = True,
+                 genre: str | None = None, description: str = "") -> Symbole:
         if self.portee.visible_dans_fonction(nom) and not (self.portee is self.racine and nom in NATIFS):
             raise self.erreur(f"'{nom}' est déjà déclaré dans cette portée", noeud)
-        self.portee.symboles[nom] = Symbole(type_, constante, initialisee)
+        if genre is None:
+            genre = "constante" if constante else "variable"
+        if not description:
+            description = f"{genre} {nom}: {type_}"
+        pos = getattr(noeud, "position_nom", None) or (noeud.ligne, noeud.colonne)
+        sym = Symbole(type_, constante, initialisee, genre, description, pos, self.fichier)
+        self.portee.symboles[nom] = sym
+        self.enregistrer(noeud, nom, sym, declaration=True, position=pos)
+        return sym
+
+    def enregistrer(self, noeud, nom: str, sym: "Symbole | None", declaration: bool = False,
+                    position: tuple[int, int] | None = None) -> None:
+        """Note une déclaration ou une utilisation (pour l'autocomplétion et le survol)."""
+        portee = self.pile_fonctions[-1] if self.pile_fonctions else None
+        ligne, colonne = position if position is not None else (noeud.ligne, noeud.colonne)
+        self.enregistrements.append({
+            "ligne": ligne, "colonne": colonne,
+            "longueur": len(nom), "nom": nom, "symbole": sym, "declaration": declaration,
+            "portee": portee, "classe": self.classe_courante,
+        })
 
     # ----- programme -----
 
@@ -176,9 +215,10 @@ class Verificateur:
                             f"classe parente '{instr.parent}' inconnue (elle doit être déclarée avant '{instr.nom}')", instr)
                 ancetres = (parent.nom, *parent.type.ancetres) if parent else ()
                 info = InfoClasse(instr.nom, TypeClasse(instr.nom, (), ancetres), parent, instr)
-                self.declarer(instr.nom, TYPE_META_CLASSE, instr, constante=True)
+                sym = self.declarer(instr.nom, TYPE_META_CLASSE, instr, constante=True, genre="classe")
                 self.classes[instr.nom] = info
                 self.classe_fichier[instr.nom] = self.fichier
+                info.symbole = sym  # type: ignore[attr-defined]
                 instr.info = info  # type: ignore[attr-defined]
         # 2. champs et signatures des méthodes (peuvent référencer n'importe quelle classe du bloc)
         for instr in instructions:
@@ -189,7 +229,15 @@ class Verificateur:
             if isinstance(instr, DeclFonction):
                 t = self._type_fonction(instr)
                 instr.type = t  # type: ignore[attr-defined]
-                self.declarer(instr.nom, t, instr, constante=True)
+                self.declarer(instr.nom, t, instr, constante=True, genre="fonction", description=self.signature_fonction(instr, t))
+
+    @staticmethod
+    def signature_fonction(f: DeclFonction, t: TypeFonction, prefixe: str = "fonction ") -> str:
+        params = []
+        for p, tp in zip(f.parametres, t.parametres):
+            params.append(f"{p.nom}: {tp}" + (" = …" if p.defaut is not None else ""))
+        retour = f" -> {t.retour}" if t.retour != RIEN else ""
+        return f"{prefixe}{f.nom}({', '.join(params)}){retour}"
 
     def _type_fonction(self, f: DeclFonction) -> TypeFonction:
         obligatoires = sum(1 for p in f.parametres if p.defaut is None)
@@ -217,6 +265,8 @@ class Verificateur:
                 raise self.erreur("un champ ne peut pas être de type 'rien'", champ.type_annot)
             info.champs[champ.nom] = t
             champ.type = t  # type: ignore[attr-defined]
+            info.descriptions[champ.nom] = f"champ {champ.nom}: {t}" + (" = …" if champ.defaut is not None else "")
+            info.positions[champ.nom] = (self.fichier, champ.ligne, champ.colonne)
             if champ.defaut is not None:
                 info.defauts.add(champ.nom)
         noms = set()
@@ -234,8 +284,13 @@ class Verificateur:
                 raise self.erreur(
                     f"la méthode '{m.nom}' ({t}) n'est pas compatible avec celle de la classe parente ({ancienne})", m)
             info.methodes[m.nom] = t
+            info.descriptions[m.nom] = self.signature_fonction(m, t, prefixe="méthode ")
+            pos = getattr(m, "position_nom", (m.ligne, m.colonne))
+            info.positions[m.nom] = (self.fichier, pos[0], pos[1])
             m.type = t  # type: ignore[attr-defined]
         info.prete = True
+        if getattr(info, "symbole", None) is not None:
+            info.symbole.description = info.signature()  # type: ignore[attr-defined]
 
     # ----- instructions -----
 
@@ -248,8 +303,11 @@ class Verificateur:
                     raise self.erreur(
                         f"le champ '{champ.nom}' est de type {champ.type}, mais sa valeur par défaut est un {t}",  # type: ignore[attr-defined]
                         champ.defaut)
+        ancienne = self.classe_courante
+        self.classe_courante = info.type
         for m in c.methodes:
             self._verifier_fonction(m, soi=info.type)
+        self.classe_courante = ancienne
         return False
 
     def bloc(self, bloc: Bloc) -> bool:
@@ -300,6 +358,7 @@ class Verificateur:
             sym = self.portee.chercher(a.cible.nom)
             if sym is None:
                 raise self.erreur(f"variable '{a.cible.nom}' inconnue", a.cible)
+            self.enregistrer(a.cible, a.cible.nom, sym)
             if sym.constante:
                 raise self.erreur(f"'{a.cible.nom}' est une constante : impossible de la modifier", a.cible)
             t_cible = sym.type
@@ -385,7 +444,11 @@ class Verificateur:
             if p.variable == p.variable2:
                 raise self.erreur(f"les deux variables de la boucle ont le même nom '{p.variable}'", p)
             self.declarer(p.variable, t1, p)
-            self.declarer(p.variable2, t2, p)
+            pos2 = getattr(p, "position_nom2", None)
+            sym2 = self.declarer(p.variable2, t2, p)
+            if pos2 is not None:
+                sym2.position = pos2
+                self.enregistrements[-1]["ligne"], self.enregistrements[-1]["colonne"] = pos2
         else:
             self.declarer(p.variable, t_var, p)
         self.profondeur_boucle += 1
@@ -410,17 +473,19 @@ class Verificateur:
         self.type_retour_attendu = t.retour
         self.profondeur_boucle = 0
         self.ouvrir(nouvelle_fonction=True)
+        self.pile_fonctions.append((f.ligne, getattr(f, "ligne_fin", f.ligne)))
         noms = set()
         if soi is not None:
-            self.declarer("soi", soi, f, constante=True)
+            self.declarer("soi", soi, f, constante=True, genre="soi", description=f"soi: {soi}")
         for p, tp in zip(f.parametres, t.parametres):
             if p.nom in noms:
                 raise self.erreur(f"paramètre '{p.nom}' en double", p)
             if tp == RIEN:
                 raise self.erreur("un paramètre ne peut pas être de type 'rien'", p)
             noms.add(p.nom)
-            self.declarer(p.nom, tp, p)
+            self.declarer(p.nom, tp, p, genre="paramètre")
         termine = self.bloc(f.corps)
+        self.pile_fonctions.pop()
         self.fermer()
         if t.retour != RIEN and not termine:
             raise self.erreur(
@@ -474,11 +539,12 @@ class Verificateur:
                 sym = m.exports[nom]
                 if not sym.initialisee:
                     raise self.erreur(f"'{nom}' n'a pas de valeur dans le module \"{imp.chemin}\"", imp)
-                self.declarer(nom, sym.type, imp, constante=True)
+                self.declarer(nom, sym.type, imp, constante=True, genre=sym.genre, description=sym.description)
         else:
             alias = imp.alias or m.nom
             imp.alias = alias
-            self.declarer(alias, TypeModule(m.nom, (), m.chemin), imp, constante=True)
+            self.declarer(alias, TypeModule(m.nom, (), m.chemin), imp, constante=True, genre="module",
+                          description=f"module {alias} (\"{imp.chemin}\")")
         return False
 
     def i_Selon(self, s: Selon) -> bool:
@@ -590,6 +656,7 @@ class Verificateur:
         sym = self.portee.chercher(i.nom)
         if sym is None:
             raise self.erreur(f"variable '{i.nom}' inconnue", i)
+        self.enregistrer(i, i.nom, sym)
         if not sym.initialisee:
             raise self.erreur(f"'{i.nom}' est utilisée avant d'avoir reçu une valeur", i)
         return sym.type
@@ -692,10 +759,16 @@ class Verificateur:
             if sym is None:
                 dispo = ", ".join(sorted(mod.exports)) or "aucun"
                 raise self.erreur(f"le module '{t.nom}' ne définit pas '{m.nom}' (disponibles : {dispo})", m)
+            self.enregistrer(m, m.nom, sym)
             return sym.type
         if not isinstance(t, TypeClasse):
             raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}')", m)
         info = self.classes[t.nom]
+        if m.nom in info.champs or m.nom in info.methodes:
+            pos = info.positions.get(m.nom, (self.fichier, 0, 0))
+            sym = Symbole(info.champs.get(m.nom) or info.methodes[m.nom], genre="champ" if m.nom in info.champs else "méthode",
+                          description=info.descriptions.get(m.nom, m.nom), position=pos[1:], fichier=pos[0])
+            self.enregistrer(m, m.nom, sym)
         if m.nom in info.champs:
             return info.champs[m.nom]
         if m.nom in info.methodes:
@@ -706,6 +779,10 @@ class Verificateur:
 
     def e_Construction(self, a: Appel, info: InfoClasse) -> Type:
         a.cible.type = TYPE_META_CLASSE  # type: ignore[attr-defined]
+        if isinstance(a.cible, Identifiant):
+            self.enregistrer(a.cible, a.cible.nom, self.portee.chercher(a.cible.nom))
+        else:
+            self.enregistrer(a.cible, a.cible.nom, getattr(info, "symbole", None))
         a.natif = None  # type: ignore[attr-defined]
         a.classe = info.nom  # type: ignore[attr-defined]
         noms_champs = list(info.champs)
@@ -749,6 +826,7 @@ class Verificateur:
         if isinstance(a.cible, Identifiant) and a.cible.nom in NATIFS and self.portee.chercher(a.cible.nom).type == Type("natif"):
             natif = NATIFS[a.cible.nom]
             a.cible.type = Type("natif")  # type: ignore[attr-defined]
+            self.enregistrer(a.cible, a.cible.nom, self.portee.chercher(a.cible.nom))
             types = [self.expression(arg) for arg in a.arguments]
             for arg, t in zip(a.arguments, types):
                 if t == RIEN:

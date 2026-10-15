@@ -304,6 +304,8 @@ depuis "outils/maths.nck" importer carre, PI // noms importés directement : car
 
 ## 13. Fonctions natives
 
+La liste complète avec signatures et descriptions est dans [`NATIFS.md`](NATIFS.md) (et au survol dans VS Code).
+
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
 - `lire(invite?)` → `texte` — lit une ligne au clavier

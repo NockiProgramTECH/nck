@@ -209,7 +209,9 @@ class Parseur:
         elif type_annot is None:
             raise self.erreur(f"la variable '{nom.valeur}' doit avoir un type (': entier') ou une valeur ('= ...')")
         self.fin_instruction()
-        return DeclVariable(nom.valeur, type_annot, valeur, constante, ligne=mot.ligne, colonne=mot.colonne)
+        d = DeclVariable(nom.valeur, type_annot, valeur, constante, ligne=mot.ligne, colonne=mot.colonne)
+        d.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+        return d
 
     def type_annot(self) -> TypeAnnot:
         if self.est_motcle("fonction"):
@@ -256,9 +258,11 @@ class Parseur:
         else:
             type_retour = TypeAnnot("rien", ligne=nom.ligne, colonne=nom.colonne)
         corps, multi = self.corps("fin")
-        if multi:
-            self.attendre_motcle("fin")
-        return DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
+        ligne_fin = self.attendre_motcle("fin").ligne if multi else self.jetons[self.pos - 1].ligne
+        f = DeclFonction(nom.valeur, parametres, type_retour, corps, ligne=mot.ligne, colonne=mot.colonne)
+        f.ligne_fin = ligne_fin  # type: ignore[attr-defined]
+        f.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+        return f
 
     def decl_classe(self) -> DeclClasse:
         mot = self.avancer()
@@ -291,8 +295,11 @@ class Parseur:
                     f"dans une classe, seuls des champs ('nom: type') et des méthodes ('fonction ...') sont "
                     f"autorisés, mais {self._decrire(self.courant())} trouvé")
             self.sauter_nl()
-        self.attendre_motcle("fin")
-        return DeclClasse(nom.valeur, parent, champs, methodes, ligne=mot.ligne, colonne=mot.colonne)
+        ligne_fin = self.attendre_motcle("fin").ligne
+        c = DeclClasse(nom.valeur, parent, champs, methodes, ligne=mot.ligne, colonne=mot.colonne)
+        c.ligne_fin = ligne_fin  # type: ignore[attr-defined]
+        c.position_nom = (nom.ligne, nom.colonne)  # type: ignore[attr-defined]
+        return c
 
     def instr_si(self) -> Si:
         mot = self.avancer()
@@ -366,7 +373,9 @@ class Parseur:
                 var = premier
             self.attendre_op(":", f"':' attendu après 'attraper {var.valeur}'")
             bloc = self.bloc_jusqua("attraper", "enfin", "fin")
-            clauses.append(Attraper(var.valeur, type_annot, bloc, ligne=ja.ligne, colonne=ja.colonne))
+            cl = Attraper(var.valeur, type_annot, bloc, ligne=ja.ligne, colonne=ja.colonne)
+            cl.position_nom = (var.ligne, var.colonne)  # type: ignore[attr-defined]
+            clauses.append(cl)
         enfin = None
         if self.est_motcle("enfin"):
             self.avancer()
@@ -422,15 +431,20 @@ class Parseur:
         mot = self.avancer()
         var = self.attendre_ident("nom de variable de boucle attendu")
         var2 = None
+        pos2 = None
         if self.est_op(","):
             self.avancer()
-            var2 = self.attendre_ident("deuxième nom de variable attendu après ','").valeur
+            j2 = self.attendre_ident("deuxième nom de variable attendu après ','")
+            var2, pos2 = j2.valeur, (j2.ligne, j2.colonne)
         self.attendre_motcle("dans")
         iterable = self.expression()
         corps, multi = self.corps("fin")
         if multi:
             self.attendre_motcle("fin")
-        return Pour(var.valeur, iterable, corps, var2, ligne=mot.ligne, colonne=mot.colonne)
+        pr = Pour(var.valeur, iterable, corps, var2, ligne=mot.ligne, colonne=mot.colonne)
+        pr.position_nom = (var.ligne, var.colonne)  # type: ignore[attr-defined]
+        pr.position_nom2 = pos2  # type: ignore[attr-defined]
+        return pr
 
     # ----- expressions (par précédence croissante) -----
 

@@ -1,23 +1,78 @@
 {
   "name": "nck-lang",
   "displayName": "NCK",
-  "description": "Coloration syntaxique pour le langage NCK (fichiers .nck)",
-  "version": "0.1.0",
+  "description": "Langage NCK : coloration, autocomplétion, survol, aide à la signature, erreurs en direct",
+  "version": "0.2.0",
   "publisher": "nockiprogramtech",
   "license": "MIT",
-  "engines": { "vscode": "^1.60.0" },
-  "categories": ["Programming Languages"],
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
   "contributes": {
-    "languages": [{
-      "id": "nck",
-      "aliases": ["NCK", "nck"],
-      "extensions": [".nck"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "nck",
-      "scopeName": "source.nck",
-      "path": "./syntaxes/nck.tmLanguage.json"
-    }]
-  }
+    "languages": [
+      {
+        "id": "nck",
+        "aliases": [
+          "NCK",
+          "nck"
+        ],
+        "extensions": [
+          ".nck"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nck",
+        "scopeName": "source.nck",
+        "path": "./syntaxes/nck.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "nck.executer",
+        "title": "NCK : Exécuter le fichier",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "nck.executer",
+          "when": "resourceLangId == nck",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "nck.executer",
+        "key": "f5",
+        "when": "editorLangId == nck && !inDebugMode"
+      }
+    ],
+    "configuration": {
+      "title": "NCK",
+      "properties": {
+        "nck.python": {
+          "type": "string",
+          "default": "",
+          "description": "Commande Python à utiliser (ex : python3, python, C:\\\\Python312\\\\python.exe). Vide = python3 (python sous Windows)."
+        },
+        "nck.dossierNck": {
+          "type": "string",
+          "default": "",
+          "description": "Dossier du dépôt nck si le paquet n'est pas installé avec pip (il sera ajouté au PYTHONPATH)."
+        }
+      }
+    }
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:nck"
+  ]
 }

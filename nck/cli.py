@@ -126,10 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     p_verif = sous.add_parser("verifier", help="vérifie la syntaxe et les types sans exécuter")
     p_verif.add_argument("fichier")
     sous.add_parser("repl", help="mode interactif")
+    sous.add_parser("serveur", help="serveur d'analyse pour les éditeurs (autocomplétion, survol, erreurs)")
 
     args = argv if argv is not None else sys.argv[1:]
     # Raccourci : `nck fichier.nck`
-    if args and args[0] not in ("executer", "verifier", "repl", "-h", "--help", "--version"):
+    if args and args[0] not in ("executer", "verifier", "repl", "serveur", "-h", "--help", "--version"):
         args = ["executer", *args]
     ns = ap.parse_args(args)
 
@@ -139,6 +140,9 @@ def main(argv: list[str] | None = None) -> int:
         return commande_executer(ns.fichier)
     if ns.commande == "verifier":
         return commande_verifier(ns.fichier)
+    if ns.commande == "serveur":
+        from .serveur import main as serveur_main
+        return serveur_main()
     return repl()
 
 

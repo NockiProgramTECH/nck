@@ -113,21 +113,23 @@ Erreur de type : impossible d'affecter un texte à une cible de type entier
    |       ^
 ```
 
-La référence complète (types, opérateurs, fonctions natives…) est dans [`docs/LANGAGE.md`](docs/LANGAGE.md).
+La référence complète du langage est dans [`docs/LANGAGE.md`](docs/LANGAGE.md), celle des fonctions natives dans
+[`docs/NATIFS.md`](docs/NATIFS.md).
 D'autres programmes se trouvent dans [`exemples/`](exemples/).
 
-## Coloration syntaxique (VS Code)
+## VS Code : coloration, autocomplétion, survol, erreurs en direct
 
-Une extension minimale se trouve dans [`editeurs/vscode/`](editeurs/vscode/). Pour l'installer :
+L'extension [`editeurs/vscode/`](editeurs/vscode/) offre l'expérience « Pylance » pour NCK : coloration,
+erreurs de syntaxe et de type soulignées en tapant, autocomplétion (variables, fonctions, `objet.`, `module.`),
+infos au survol, aide à la signature, aller à la définition, exécution par `F5`.
 
 ```bash
-# Linux / macOS
-cp -r editeurs/vscode ~/.vscode/extensions/nck-lang
-# Windows (PowerShell)
-Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang"
+pip install -e .                                              # 1. le paquet nck (serveur d'analyse)
+cp -r editeurs/vscode ~/.vscode/extensions/nck-lang           # 2. l'extension (Linux/macOS)
+Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang"   #    (Windows)
 ```
 
-puis redémarrez VS Code : les fichiers `.nck` sont colorés, et les commentaires / blocs / parenthèses sont gérés.
+puis redémarrez VS Code. Guide complet : [`docs/EDITEUR.md`](docs/EDITEUR.md).
 
 ## Structure du projet
 
@@ -145,7 +147,8 @@ nck/
 └── cli.py            # commande `nck`
 exemples/             # programmes .nck
 tests/                # tests (pytest)
-docs/LANGAGE.md       # référence du langage
+editeurs/vscode/      # extension VS Code
+docs/                 # LANGAGE.md, NATIFS.md, EDITEUR.md
 ```
 
 ## Développement
@@ -164,4 +167,5 @@ pytest
 - [x] v0.5 — modules (`importer "fichier.nck"`, `comme`, `depuis … importer`)
 - [x] v0.6 — bibliothèque standard : fichiers, JSON, date/heure, arguments, formatage
 - [x] v0.7 — textes formatés `f"..."`, paramètres par défaut, `selon`/`cas`, `pour i, x dans`
+- [x] v0.8 — serveur d'analyse pour VS Code : autocomplétion, survol, signature, définition, erreurs en direct
 - [ ] réécriture du moteur en C
