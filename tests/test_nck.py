@@ -578,3 +578,64 @@ def test_modules_erreurs(tmp_path):
     check('importer "m.txt"', "fichier .nck")
     check('importer "m.nck"\nclasse C:\n    w: entier\nfin', "définie à la fois")
     check('importer "m.nck"\necrire(m.X + "a")', "additionner un entier et un texte")
+
+
+# ---------- bibliothèque standard ----------
+
+def test_fichiers(tmp_path):
+    f = str(tmp_path / "a.txt").replace("\\", "\\\\")
+    src = f'''
+constante F = "{f}"
+ecrire_fichier(F, "ligne 1\\nligne 2")
+ajouter_fichier(F, "\\nligne 3")
+ecrire(fichier_existe(F), lire_lignes(F), longueur(lire_fichier(F)))
+supprimer_fichier(F)
+ecrire(fichier_existe(F))
+essayer:
+    lire_fichier(F)
+attraper e:
+    ecrire(e.message)
+fin
+'''
+    assert run(src) == f'vrai ["ligne 1", "ligne 2", "ligne 3"] 23\nfaux\nfichier introuvable : "{tmp_path / "a.txt"}"\n'
+
+
+def test_json():
+    src = '''
+classe P:
+    nom: texte
+    tags: liste<texte>
+fin
+variable j = vers_json([P("a", ["x"]), {"k": 1.5}, nul, vrai])
+ecrire(j)
+variable d = depuis_json(j)
+ecrire(d[0]["nom"], d[1]["k"], d[2], longueur(d))
+essayer:
+    depuis_json("{oups")
+attraper e:
+    ecrire(contient(e.message, "JSON invalide"))
+fin
+'''
+    assert run(src) == '[{"nom": "a", "tags": ["x"]}, {"k": 1.5}, null, true]\na 1.5 nul 4\nvrai\n'
+
+
+def test_dates_et_texte():
+    src = '''
+variable t = creer_date(2026, 12, 25, 10, 30)
+variable d = date(t)
+ecrire(d["annee"], d["mois"], d["jour"], d["heure"], d["minute"], formater_date("JJ/MM/AAAA hh:mm", t))
+ecrire(formater("{} a {} ans", "Awa", 20), formater("{1}-{0}", "a", "b"))
+ecrire(est_nombre("3,5"), est_entier("-4"), est_entier("4.0"), remplir_gauche("7", 3, "0"), remplir_droite("ab", 4, ".") + "|")
+'''
+    assert run(src) == "2026 12 25 10 30 25/12/2026 10:30\nAwa a 20 ans b-a\nvrai vrai faux 007 ab..|\n"
+
+
+def test_arguments_et_env(monkeypatch):
+    from nck import natifs
+    monkeypatch.setattr(natifs, "ARGUMENTS", ["x", "y"])
+    monkeypatch.setenv("NCK_TEST", "ok")
+    assert run('ecrire(arguments(), variable_env("NCK_TEST"), variable_env("NCK_ABSENT", "defaut"))') == '["x", "y"] ok defaut\n'
+
+
+def test_quelconque_indexable_par_texte():
+    assert run('variable d: quelconque = {"a": [1, 2]}\necrire(d["a"][1])') == "2\n"

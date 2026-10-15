@@ -624,6 +624,8 @@ class Verificateur:
             if not compatible(ti, cle_de(tc)):
                 raise self.erreur(f"la clé doit être un {cle_de(tc)}, mais c'est un {ti}", i.index)
             return valeur_de(tc)
+        if tc == QUELCONQUE:
+            return QUELCONQUE
         if ti != ENTIER and ti != QUELCONQUE:
             raise self.erreur(f"l'index doit être un entier, mais c'est un {ti}", i.index)
         if tc == TEXTE:

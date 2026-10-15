@@ -303,7 +303,28 @@ depuis "outils/maths.nck" importer carre, PI // noms importés directement : car
 
 **Divers**
 - `horloge()` → secondes (chronométrage), `attendre(secondes)`, `quitter(code?)`
-- `verifier(condition, message?)` — stoppe le programme si la condition est fausse
+- `verifier(condition, message?)` — lève une erreur si la condition est fausse
+- `formater("{} a {} ans", nom, age)` → `texte` (ou `{0}`, `{1}` pour choisir l'ordre)
+- `est_nombre(t)`, `est_entier(t)`, `remplir_gauche(t, n, car)`, `remplir_droite(t, n, car)`
+
+**Fichiers** (les erreurs — fichier introuvable, accès refusé — sont attrapables avec `essayer`)
+- `lire_fichier(chemin)` → `texte`, `lire_lignes(chemin)` → `liste<texte>`
+- `ecrire_fichier(chemin, contenu)`, `ajouter_fichier(chemin, contenu)`, `supprimer_fichier(chemin)`
+- `fichier_existe(chemin)`, `dossier_existe(chemin)`, `creer_dossier(chemin)`, `lister_dossier(chemin?)`
+- `joindre_chemin(a, b, ...)`, `dossier_courant()`
+
+**JSON**
+- `vers_json(valeur, joli?)` → `texte` — listes, dicos, objets (leurs champs), nombres, textes, booléens, `nul`
+- `depuis_json(texte)` → `quelconque` (dicos et listes ; indexables par `["cle"]` et `[i]`)
+
+**Date et heure**
+- `maintenant()` → `reel` (secondes depuis 1970), `creer_date(annee, mois, jour, heure?, minute?, seconde?)` → `reel`
+- `date(horodatage?)` → `dico<texte, entier>` avec `annee, mois, jour, heure, minute, seconde, jour_semaine`
+- `formater_date(format?, horodatage?)` → `texte` — format avec `AAAA MM JJ hh mm ss` (défaut : `JJ/MM/AAAA hh:mm:ss`)
+
+**Système**
+- `arguments()` → `liste<texte>` : arguments passés après le fichier (`nck prog.nck a b`)
+- `variable_env(nom, defaut?)` → `texte`, `ecrire_erreur(...)` (sortie d'erreur)
 
 ## 14. Erreurs
 

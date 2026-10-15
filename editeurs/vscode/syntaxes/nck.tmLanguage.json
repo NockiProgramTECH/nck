@@ -90,7 +90,7 @@
     },
     "natifs": {
       "name": "support.function.builtin.nck",
-      "match": "\\b(ecrire|lire|texte|entier|reel|booleen|type_de|longueur|intervalle|ajouter|retirer|inserer|contient|position|trier|inverser|copier|tranche|somme|minimum|maximum|majuscule|minuscule|nettoyer|remplacer|decouper|joindre|commence_par|termine_par|caractere|code|absolu|racine|puissance|arrondir|plancher|plafond|division_entiere|aleatoire|horloge|attendre|quitter|verifier|cles|valeurs|obtenir|fusionner)(?=\\s*\\()"
+      "match": "\\b(ecrire|lire|texte|entier|reel|booleen|type_de|longueur|intervalle|ajouter|retirer|inserer|contient|position|trier|inverser|copier|tranche|somme|minimum|maximum|majuscule|minuscule|nettoyer|remplacer|decouper|joindre|commence_par|termine_par|caractere|code|absolu|racine|puissance|arrondir|plancher|plafond|division_entiere|aleatoire|horloge|attendre|quitter|verifier|cles|valeurs|obtenir|fusionner|lire_fichier|lire_lignes|ecrire_fichier|ajouter_fichier|fichier_existe|dossier_existe|supprimer_fichier|creer_dossier|lister_dossier|joindre_chemin|vers_json|depuis_json|maintenant|date|formater_date|creer_date|arguments|variable_env|dossier_courant|ecrire_erreur|formater|est_nombre|est_entier|remplir_gauche|remplir_droite)(?=\\s*\\()"
     },
     "appels": {
       "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",

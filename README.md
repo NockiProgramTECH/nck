@@ -47,6 +47,7 @@ Sans installation : `python -m nck programme.nck`.
 
 ```bash
 nck programme.nck            # exécute un fichier
+nck programme.nck a b        # ... avec des arguments (lus par arguments())
 nck verifier programme.nck   # vérifie la syntaxe et les types, sans exécuter
 nck                          # mode interactif
 ```
@@ -161,5 +162,5 @@ pytest
 - [x] v0.3 — gestion des erreurs (`essayer` / `attraper` / `enfin` / `lever`), extension VS Code
 - [x] v0.4 — dictionnaires `dico<K, V>`
 - [x] v0.5 — modules (`importer "fichier.nck"`, `comme`, `depuis … importer`)
-- [ ] bibliothèque standard (fichiers, JSON, dates, arguments de la ligne de commande)
-- [ ] réécriture du moteur en C une fois la syntaxe stabilisée
+- [x] v0.6 — bibliothèque standard : fichiers, JSON, date/heure, arguments, formatage
+- [ ] réécriture du moteur en C

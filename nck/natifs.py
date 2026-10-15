@@ -739,3 +739,277 @@ def _verifier(cond, message="assertion échouée"):
     if not cond:
         raise ErreurExecution(vers_texte(message))
     return None
+
+
+# =====================================================================
+# Bibliothèque standard : fichiers, JSON, date/heure, système, texte
+# =====================================================================
+
+import datetime as _dt
+import json as _json
+import os as _os
+
+ARGUMENTS: list[str] = []   # rempli par la ligne de commande (nck fichier.nck arg1 arg2 ...)
+
+
+def _erreur_fichier(exc: OSError, chemin: str) -> ErreurExecution:
+    if isinstance(exc, FileNotFoundError):
+        return ErreurExecution(f"fichier introuvable : \"{chemin}\"")
+    if isinstance(exc, PermissionError):
+        return ErreurExecution(f"accès refusé : \"{chemin}\"")
+    if isinstance(exc, IsADirectoryError):
+        return ErreurExecution(f"\"{chemin}\" est un dossier, pas un fichier")
+    if isinstance(exc, FileExistsError):
+        return ErreurExecution(f"\"{chemin}\" existe déjà")
+    return ErreurExecution(f"erreur sur \"{chemin}\" : {exc.strerror or exc}")
+
+
+# ---------- fichiers ----------
+
+@natif("lire_fichier", simple("lire_fichier", [TEXTE], TEXTE))
+def _lire_fichier(chemin):
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            return f.read()
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+    except UnicodeDecodeError:
+        raise ErreurExecution(f"\"{chemin}\" n'est pas un fichier texte UTF-8") from None
+
+
+@natif("lire_lignes", simple("lire_lignes", [TEXTE], liste_de(TEXTE)))
+def _lire_lignes(chemin):
+    return _lire_fichier(chemin).splitlines()
+
+
+@natif("ecrire_fichier", simple("ecrire_fichier", [TEXTE, TEXTE], RIEN))
+def _ecrire_fichier(chemin, contenu):
+    try:
+        with open(chemin, "w", encoding="utf-8") as f:
+            f.write(contenu)
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+    return None
+
+
+@natif("ajouter_fichier", simple("ajouter_fichier", [TEXTE, TEXTE], RIEN))
+def _ajouter_fichier(chemin, contenu):
+    try:
+        with open(chemin, "a", encoding="utf-8") as f:
+            f.write(contenu)
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+    return None
+
+
+@natif("fichier_existe", simple("fichier_existe", [TEXTE], BOOLEEN))
+def _fichier_existe(chemin):
+    return _os.path.isfile(chemin)
+
+
+@natif("dossier_existe", simple("dossier_existe", [TEXTE], BOOLEEN))
+def _dossier_existe(chemin):
+    return _os.path.isdir(chemin)
+
+
+@natif("supprimer_fichier", simple("supprimer_fichier", [TEXTE], RIEN))
+def _supprimer_fichier(chemin):
+    try:
+        _os.remove(chemin)
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+    return None
+
+
+@natif("creer_dossier", simple("creer_dossier", [TEXTE], RIEN))
+def _creer_dossier(chemin):
+    try:
+        _os.makedirs(chemin, exist_ok=True)
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+    return None
+
+
+def _v_lister_dossier(types, erreur):
+    _arite("lister_dossier", types, 0, 1, erreur)
+    if types:
+        _exiger("lister_dossier", types[0], TEXTE, 1, erreur)
+    return liste_de(TEXTE)
+
+
+@natif("lister_dossier", _v_lister_dossier)
+def _lister_dossier(chemin="."):
+    try:
+        return sorted(_os.listdir(chemin))
+    except OSError as e:
+        raise _erreur_fichier(e, chemin) from None
+
+
+@natif("joindre_chemin", lambda t, e: (_arite("joindre_chemin", t, 1, None, e),
+                                        [_exiger("joindre_chemin", x, TEXTE, i, e) for i, x in enumerate(t, 1)], TEXTE)[2])
+def _joindre_chemin(*morceaux):
+    return _os.path.join(*morceaux)
+
+
+# ---------- JSON ----------
+
+def _vers_python_json(v, chemin="valeur"):
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return v
+    if isinstance(v, list):
+        return [_vers_python_json(x, f"{chemin}[{i}]") for i, x in enumerate(v)]
+    if isinstance(v, dict):
+        return {str(k) if not isinstance(k, str) else k: _vers_python_json(x, f"{chemin}[{_repr_elem(k)}]") for k, x in v.items()}
+    if isinstance(v, ObjetNck):
+        return {k: _vers_python_json(x, f"{chemin}.{k}") for k, x in v.champs.items()}
+    raise ErreurExecution(f"impossible de convertir {chemin} ({nom_type_valeur(v)}) en JSON")
+
+
+def _v_vers_json(types, erreur):
+    _arite("vers_json", types, 1, 2, erreur)
+    if len(types) == 2:
+        _exiger("vers_json", types[1], BOOLEEN, 2, erreur)
+    return TEXTE
+
+
+@natif("vers_json", _v_vers_json)
+def _vers_json(v, joli=False):
+    return _json.dumps(_vers_python_json(v), ensure_ascii=False, indent=2 if joli else None)
+
+
+@natif("depuis_json", simple("depuis_json", [TEXTE], QUELCONQUE))
+def _depuis_json(texte):
+    try:
+        return _json.loads(texte)
+    except _json.JSONDecodeError as e:
+        raise ErreurExecution(f"JSON invalide : {e.msg} (ligne {e.lineno}, colonne {e.colno})") from None
+
+
+# ---------- date et heure ----------
+
+@natif("maintenant", simple("maintenant", [], REEL))
+def _maintenant():
+    return time.time()
+
+
+def _v_date(types, erreur):
+    _arite("date", types, 0, 1, erreur)
+    if types:
+        _exiger("date", types[0], REEL, 1, erreur)
+    from .types_nck import dico_de
+    return dico_de(TEXTE, ENTIER)
+
+
+@natif("date", _v_date)
+def _date(horodatage=None):
+    d = _dt.datetime.now() if horodatage is None else _dt.datetime.fromtimestamp(horodatage)
+    return {"annee": d.year, "mois": d.month, "jour": d.day, "heure": d.hour,
+            "minute": d.minute, "seconde": d.second, "jour_semaine": d.isoweekday()}
+
+
+_FORMATS = {"AAAA": "%Y", "AA": "%y", "MM": "%m", "JJ": "%d", "hh": "%H", "mm": "%M", "ss": "%S"}
+
+
+def _v_formater_date(types, erreur):
+    _arite("formater_date", types, 0, 2, erreur)
+    if len(types) >= 1:
+        _exiger("formater_date", types[0], TEXTE, 1, erreur)
+    if len(types) == 2:
+        _exiger("formater_date", types[1], REEL, 2, erreur)
+    return TEXTE
+
+
+@natif("formater_date", _v_formater_date)
+def _formater_date(format="JJ/MM/AAAA hh:mm:ss", horodatage=None):
+    """Format lisible : AAAA (année), MM (mois), JJ (jour), hh, mm, ss."""
+    d = _dt.datetime.now() if horodatage is None else _dt.datetime.fromtimestamp(horodatage)
+    fmt = format.replace("%", "%%")
+    for cle, val in _FORMATS.items():
+        fmt = fmt.replace(cle, val)
+    return d.strftime(fmt)
+
+
+@natif("creer_date", lambda t, e: (_arite("creer_date", t, 3, 6, e),
+                                   [_exiger("creer_date", x, ENTIER, i, e) for i, x in enumerate(t, 1)], REEL)[2])
+def _creer_date(annee, mois, jour, heure=0, minute=0, seconde=0):
+    try:
+        return _dt.datetime(annee, mois, jour, heure, minute, seconde).timestamp()
+    except ValueError as e:
+        raise ErreurExecution(f"date invalide : {e}") from None
+
+
+# ---------- système ----------
+
+@natif("arguments", simple("arguments", [], liste_de(TEXTE)))
+def _arguments():
+    return list(ARGUMENTS)
+
+
+def _v_variable_env(types, erreur):
+    _arite("variable_env", types, 1, 2, erreur)
+    for i, t in enumerate(types, 1):
+        _exiger("variable_env", t, TEXTE, i, erreur)
+    return TEXTE
+
+
+@natif("variable_env", _v_variable_env)
+def _variable_env(nom, defaut=""):
+    return _os.environ.get(nom, defaut)
+
+
+@natif("dossier_courant", simple("dossier_courant", [], TEXTE))
+def _dossier_courant():
+    return _os.getcwd()
+
+
+@natif("ecrire_erreur", _v_ecrire)
+def _ecrire_erreur(*args):
+    sys.stderr.write(" ".join(vers_texte(a) for a in args) + "\n")
+    return None
+
+
+# ---------- texte (suite) ----------
+
+def _v_formater(types, erreur):
+    _arite("formater", types, 1, None, erreur)
+    _exiger("formater", types[0], TEXTE, 1, erreur)
+    return TEXTE
+
+
+@natif("formater", _v_formater)
+def _formater(modele, *valeurs):
+    """formater("{} a {} ans", nom, age) ; {0}, {1} pour choisir l'ordre."""
+    morceaux = modele.split("{}")
+    if len(morceaux) - 1 > len(valeurs):
+        raise ErreurExecution(f"'formater' : {len(morceaux) - 1} emplacement(s) {{}} mais {len(valeurs)} valeur(s)")
+    resultat = morceaux[0]
+    for i, m in enumerate(morceaux[1:]):
+        resultat += vers_texte(valeurs[i]) + m
+    for i, v in enumerate(valeurs):
+        resultat = resultat.replace("{" + str(i) + "}", vers_texte(v))
+    return resultat
+
+
+@natif("est_nombre", simple("est_nombre", [TEXTE], BOOLEEN))
+def _est_nombre(t):
+    try:
+        float(t.strip().replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
+@natif("est_entier", simple("est_entier", [TEXTE], BOOLEEN))
+def _est_entier(t):
+    t = t.strip()
+    return t[1:].isdigit() if t[:1] in "+-" else t.isdigit()
+
+
+@natif("remplir_gauche", simple("remplir_gauche", [TEXTE, ENTIER, TEXTE], TEXTE))
+def _remplir_gauche(t, n, c):
+    return t.rjust(n, c[:1] or " ")
+
+
+@natif("remplir_droite", simple("remplir_droite", [TEXTE, ENTIER, TEXTE], TEXTE))
+def _remplir_droite(t, n, c):
+    return t.ljust(n, c[:1] or " ")

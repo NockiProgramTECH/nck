@@ -122,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     sous = ap.add_subparsers(dest="commande")
     p_exec = sous.add_parser("executer", help="exécute un fichier .nck (commande par défaut)")
     p_exec.add_argument("fichier")
+    p_exec.add_argument("arguments", nargs=argparse.REMAINDER, help="arguments passés au programme (arguments())")
     p_verif = sous.add_parser("verifier", help="vérifie la syntaxe et les types sans exécuter")
     p_verif.add_argument("fichier")
     sous.add_parser("repl", help="mode interactif")
@@ -133,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(args)
 
     if ns.commande == "executer":
+        from . import natifs
+        natifs.ARGUMENTS[:] = ns.arguments
         return commande_executer(ns.fichier)
     if ns.commande == "verifier":
         return commande_verifier(ns.fichier)
