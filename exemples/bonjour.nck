@@ -1,0 +1,7 @@
+// Premier programme NCK
+variable nombre = 20
+si (nombre > 20): ecrire("ton nombre est grand")
+sinon: ecrire("ton nombre est petit ou égal à 20")
+
+variable nom: texte = "Ouaga"
+ecrire("Bonjour", nom, "!")

@@ -1,0 +1,15 @@
+// Petit test de performance
+fonction fib(n: entier) -> entier:
+    si (n < 2): retourner n
+    retourner fib(n - 1) + fib(n - 2)
+fin
+
+variable debut = horloge()
+ecrire("fib(25) =", fib(25))
+
+variable s = 0
+pour i dans intervalle(1000000):
+    s += i
+fin
+ecrire("somme =", s)
+ecrire("durée :", arrondir(horloge() - debut, 3), "s")

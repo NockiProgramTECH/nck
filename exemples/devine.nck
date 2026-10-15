@@ -1,0 +1,18 @@
+// Jeu : devine le nombre
+constante secret = aleatoire(1, 100)
+variable essais = 0
+variable trouve = faux
+
+ecrire("Je pense à un nombre entre 1 et 100.")
+tantque (non trouve):
+    variable reponse = lire("Ta proposition ? ")
+    si (reponse == ""): arreter
+    variable n = entier(reponse)
+    essais += 1
+    si (n < secret): ecrire("Plus grand !")
+    sinon si (n > secret): ecrire("Plus petit !")
+    sinon:
+        trouve = vrai
+        ecrire("Bravo ! Trouvé en", essais, "essai(s).")
+    fin
+fin
