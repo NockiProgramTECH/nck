@@ -2,7 +2,7 @@
 
 from .arbre import (
     Affectation, Appel, Arreter, Attraper, Binaire, Bloc, Champ, Continuer, DeclClasse, DeclFonction,
-    DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral,
+    DeclVariable, DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral,
     Logique, Membre, Parametre, Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurSyntaxe
@@ -140,6 +140,10 @@ class Parseur:
                 return self.instr_si()
             if mot == "essayer":
                 return self.instr_essayer()
+            if mot in ("importer", "depuis"):
+                return self.instr_importer()
+            if mot == "comme":
+                raise self.erreur("'comme' inattendu : il s'utilise après importer \"fichier.nck\"")
             if mot == "lever":
                 self.avancer()
                 valeur = self.expression()
@@ -308,6 +312,32 @@ class Parseur:
         if multi:
             self.attendre_motcle("fin")
         return bloc
+
+    def instr_importer(self) -> Importer:
+        mot = self.avancer()
+        if mot.valeur == "depuis":
+            # depuis "fichier.nck" importer a, b
+            if not self.est("texte"):
+                raise self.erreur(f"chemin du fichier attendu entre guillemets après 'depuis', mais {self._decrire(self.courant())} trouvé")
+            chemin = self.avancer().valeur
+            self.attendre_motcle("importer")
+            noms = [self.attendre_ident("nom à importer attendu").valeur]
+            while self.est_op(","):
+                self.avancer()
+                noms.append(self.attendre_ident("nom à importer attendu").valeur)
+            self.fin_instruction()
+            return Importer(chemin, None, noms, ligne=mot.ligne, colonne=mot.colonne)
+        # importer "fichier.nck" [comme alias]
+        if not self.est("texte"):
+            raise self.erreur(f"chemin du fichier attendu entre guillemets après 'importer' (ex : importer \"maths.nck\"), "
+                              f"mais {self._decrire(self.courant())} trouvé")
+        chemin = self.avancer().valeur
+        alias = None
+        if self.est_motcle("comme"):
+            self.avancer()
+            alias = self.attendre_ident("nom d'alias attendu après 'comme'").valeur
+        self.fin_instruction()
+        return Importer(chemin, alias, None, ligne=mot.ligne, colonne=mot.colonne)
 
     def instr_essayer(self) -> Essayer:
         mot = self.avancer()

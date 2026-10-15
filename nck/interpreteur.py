@@ -9,11 +9,12 @@ from typing import Callable
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Si, TantQue, Unaire,
 )
 from .erreurs import ErreurExecution, ErreurNck
-from .natifs import NATIFS, ClasseNck, FonctionNck, ObjetNck, nom_type_valeur, vers_texte
+from .modules import Chargeur
+from .natifs import NATIFS, ClasseNck, FonctionNck, ModuleNck, ObjetNck, nom_type_valeur, vers_texte
 from .types_nck import ENTIER, QUELCONQUE, TEXTE, Type, est_dico, est_liste, valeur_compatible
 
 
@@ -97,14 +98,20 @@ Fn = Callable[[Env], object]
 
 
 class Interpreteur:
-    def __init__(self, fichier: str = "<entrée>", limite_recursion: int = 2000):
+    def __init__(self, fichier: str = "<entrée>", limite_recursion: int = 2000,
+                 chargeur: Chargeur | None = None, base_env: "Env | None" = None):
         self.fichier = fichier
         self.limite_recursion = limite_recursion
-        self.global_env = Env()
-        for nom, natif in NATIFS.items():
-            self.global_env.vars[nom] = natif
-        self.classe_erreur = fabriquer_classe_erreur()
-        self.global_env.vars["Erreur"] = self.classe_erreur
+        self.chargeur = chargeur if chargeur is not None else Chargeur()
+        if base_env is None:
+            # Environnement de base partagé par le programme principal et tous les modules : natifs + Erreur
+            base_env = Env()
+            for nom, natif in NATIFS.items():
+                base_env.vars[nom] = natif
+            base_env.vars["Erreur"] = fabriquer_classe_erreur()
+        self.base_env = base_env
+        self.classe_erreur = base_env.vars["Erreur"]
+        self.global_env = Env(base_env)
 
     def erreur(self, message: str, noeud) -> ErreurExecution:
         return ErreurExecution(message, noeud.ligne, noeud.colonne, self.fichier)
@@ -456,6 +463,24 @@ class Interpreteur:
             raise _Retour(val(env))
         return ret
 
+    def i_Importer(self, imp: Importer) -> Fn:
+        m = imp.module  # type: ignore[attr-defined]
+        alias, noms = imp.alias, imp.noms
+        chargeur, base_env = self.chargeur, self.base_env
+
+        def importer(env):
+            if not m.execute:
+                m.execute = True
+                sous = Interpreteur(m.chemin, self.limite_recursion, chargeur, base_env)
+                sous.executer(m.programme)
+                m.env = sous.global_env
+            if noms is not None:
+                for n in noms:
+                    env.vars[n] = m.env.vars[n]
+            else:
+                env.vars[alias] = ModuleNck(m.nom, m.env)
+        return importer
+
     def i_Lever(self, l: Lever) -> Fn:
         val = self.expression(l.valeur)
         classe_erreur = self.classe_erreur
@@ -701,6 +726,11 @@ class Interpreteur:
                 if meth is not None:
                     return FonctionNck(f"{o.classe.nom}.{nom}", -1, lambda *args: meth(o, *args))
                 raise erreur(f"la classe '{o.classe.nom}' n'a pas de champ ni de méthode '{nom}'", m)
+            if isinstance(o, ModuleNck):
+                try:
+                    return o.env.vars[nom]
+                except KeyError:
+                    raise erreur(f"le module '{o.nom}' ne définit pas '{nom}'", m) from None
             raise erreur(f"un {nom_type_valeur(o)} n'a pas de champ ni de méthode '{nom}'", m)
         return membre
 
@@ -740,6 +770,11 @@ class Interpreteur:
                     if f is not None:
                         return self._appeler_valeur(f, [g(env) for g in args], a, nom_m)
                     raise erreur(f"la classe '{o.classe.nom}' n'a pas de méthode '{nom_m}'", noeud_m)
+                if isinstance(o, ModuleNck):
+                    f = o.env.vars.get(nom_m)
+                    if f is None:
+                        raise erreur(f"le module '{o.nom}' ne définit pas '{nom_m}'", noeud_m)
+                    return self._appeler_valeur(f, [g(env) for g in args], a, nom_m)
                 raise erreur(f"un {nom_type_valeur(o)} n'a pas de méthode '{nom_m}'", noeud_m)
             return appel_methode
 

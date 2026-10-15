@@ -35,6 +35,15 @@ class TypeClasse(Type):
         return self.nom == nom or nom in self.ancetres
 
 
+@dataclass(frozen=True)
+class TypeModule(Type):
+    """Type d'un module importé (`importer "x.nck"`). `chemin` est le chemin absolu du fichier."""
+    chemin: str = ""
+
+    def __str__(self) -> str:
+        return f"module({self.nom})"
+
+
 ENTIER = Type("entier")
 REEL = Type("reel")
 TEXTE = Type("texte")

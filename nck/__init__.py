@@ -10,23 +10,25 @@ from .erreurs import ErreurExecution, ErreurLexicale, ErreurNck, ErreurSyntaxe, 
 from .interpreteur import Interpreteur
 from .lexeur import lexer
 from .parseur import parser
-from .verificateur import verifier
+from .modules import Chargeur
+from .verificateur import Verificateur, verifier
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     "__version__", "executer_source", "compiler_source", "lexer", "parser", "verifier", "Interpreteur",
     "ErreurNck", "ErreurLexicale", "ErreurSyntaxe", "ErreurType", "ErreurExecution",
 ]
 
 
-def compiler_source(source: str, fichier: str = "<entrée>"):
+def compiler_source(source: str, fichier: str = "<entrée>", chargeur: Chargeur | None = None):
     """Analyse et vérifie les types d'un programme NCK sans l'exécuter. Retourne l'AST annoté."""
     prog = parser(source, fichier)
-    verifier(prog, fichier)
+    Verificateur(fichier, chargeur=chargeur).verifier_programme(prog)
     return prog
 
 
 def executer_source(source: str, fichier: str = "<entrée>") -> None:
     """Analyse, vérifie puis exécute un programme NCK."""
-    prog = compiler_source(source, fichier)
-    Interpreteur(fichier).executer(prog)
+    chargeur = Chargeur()
+    prog = compiler_source(source, fichier, chargeur)
+    Interpreteur(fichier, chargeur=chargeur).executer(prog)

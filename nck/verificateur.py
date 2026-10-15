@@ -1,15 +1,18 @@
+import os
+
 """Vérificateur de types statique : annote l'AST et signale les erreurs avant l'exécution."""
 
 from .arbre import (
     Affectation, Appel, Arreter, Binaire, Bloc, Continuer, DeclClasse, DeclFonction, DeclVariable,
-    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
+    DicoLit, Essayer, ExprInstr, Expr, Identifiant, Importer, Index, Instr, Lever, ListeLit, Litteral, Logique, Membre,
     Pour, Programme, Retourner, Si, TantQue, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
+from .modules import Chargeur, Module
 from .natifs import NATIFS
 from .types_nck import (
     BOOLEEN, DICO_VIDE, ENTIER, LISTE_VIDE, NUL, QUELCONQUE, REEL, RIEN, TEXTE, TYPES_CLES, TYPES_SIMPLES,
-    Type, TypeClasse, TypeFonction, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
+    Type, TypeClasse, TypeFonction, TypeModule, cle_de, compatible, dico_de, element_de, est_dico, est_liste,
     est_numerique, liste_de, unifier, valeur_de,
 )
 
@@ -66,20 +69,25 @@ class Portee:
 
 
 class Verificateur:
-    def __init__(self, fichier: str = "<entrée>", mode_repl: bool = False):
+    def __init__(self, fichier: str = "<entrée>", mode_repl: bool = False,
+                 chargeur: Chargeur | None = None, classes: "dict[str, InfoClasse] | None" = None):
         self.fichier = fichier
         self.mode_repl = mode_repl  # en mode interactif, une expression seule est autorisée (sa valeur est affichée)
         self.portee = Portee()
+        self.racine = self.portee
         self.type_retour_attendu: Type | None = None
         self.profondeur_boucle = 0
-        self.classes: dict[str, InfoClasse] = {}
+        self.chargeur = chargeur if chargeur is not None else Chargeur()
+        self.classes: dict[str, InfoClasse] = classes if classes is not None else {}
+        self.classe_fichier: dict[str, str] = {}   # nom de classe -> fichier qui la définit
         for nom in NATIFS:
             self.portee.symboles[nom] = Symbole(Type("natif"), constante=True)
         # Classe intégrée `Erreur` (base de toutes les erreurs levées / attrapées)
-        erreur = InfoClasse("Erreur", TYPE_ERREUR, None, None)
-        erreur.champs["message"] = TEXTE
-        erreur.prete = True
-        self.classes["Erreur"] = erreur
+        if "Erreur" not in self.classes:
+            erreur = InfoClasse("Erreur", TYPE_ERREUR, None, None)
+            erreur.champs["message"] = TEXTE
+            erreur.prete = True
+            self.classes["Erreur"] = erreur
         self.portee.symboles["Erreur"] = Symbole(TYPE_META_CLASSE, constante=True)
 
     # ----- aides -----
@@ -135,9 +143,7 @@ class Verificateur:
         self.portee = self.portee.parent
 
     def declarer(self, nom: str, type_: Type, noeud, constante: bool = False, initialisee: bool = True) -> None:
-        if nom in NATIFS:
-            raise self.erreur(f"'{nom}' est une fonction native, impossible de la redéfinir", noeud)
-        if self.portee.visible_dans_fonction(nom):
+        if self.portee.visible_dans_fonction(nom) and not (self.portee is self.racine and nom in NATIFS):
             raise self.erreur(f"'{nom}' est déjà déclaré dans cette portée", noeud)
         self.portee.symboles[nom] = Symbole(type_, constante, initialisee)
 
@@ -153,6 +159,15 @@ class Verificateur:
         # 1. noms des classes (une classe parente doit être déclarée avant ses enfants)
         for instr in instructions:
             if isinstance(instr, DeclClasse):
+                if instr.nom in self.classes:
+                    autre = self.classe_fichier.get(instr.nom)
+                    if autre is None:
+                        raise self.erreur(f"la classe '{instr.nom}' existe déjà (classe intégrée)", instr)
+                    if autre == self.fichier:
+                        raise self.erreur(f"la classe '{instr.nom}' est définie deux fois", instr)
+                    raise self.erreur(
+                        f"la classe '{instr.nom}' est définie à la fois dans {os.path.basename(autre)} et dans "
+                        f"{os.path.basename(self.fichier)} : les noms de classes doivent être uniques entre modules", instr)
                 parent = None
                 if instr.parent is not None:
                     parent = self.classes.get(instr.parent)
@@ -163,6 +178,7 @@ class Verificateur:
                 info = InfoClasse(instr.nom, TypeClasse(instr.nom, (), ancetres), parent, instr)
                 self.declarer(instr.nom, TYPE_META_CLASSE, instr, constante=True)
                 self.classes[instr.nom] = info
+                self.classe_fichier[instr.nom] = self.fichier
                 instr.info = info  # type: ignore[attr-defined]
         # 2. champs et signatures des méthodes (peuvent référencer n'importe quelle classe du bloc)
         for instr in instructions:
@@ -290,6 +306,8 @@ class Verificateur:
         elif isinstance(a.cible, Membre):
             t_cible = self.expression(a.cible)
             t_obj = a.cible.objet.type  # type: ignore[attr-defined]
+            if isinstance(t_obj, TypeModule):
+                raise self.erreur(f"impossible de modifier '{a.cible.nom}' depuis l'extérieur du module '{t_obj.nom}'", a.cible)
             if isinstance(t_obj, TypeClasse) and a.cible.nom in self.classes[t_obj.nom].methodes:
                 raise self.erreur(f"'{a.cible.nom}' est une méthode : impossible de la modifier", a.cible)
         else:
@@ -407,6 +425,40 @@ class Verificateur:
         r.verif_runtime = (t == QUELCONQUE and attendu != QUELCONQUE)  # type: ignore[attr-defined]
         r.type_attendu = attendu  # type: ignore[attr-defined]
         return True
+
+    def i_Importer(self, imp: Importer) -> bool:
+        if self.portee is not self.racine:
+            raise self.erreur("'importer' doit être placé au niveau principal du fichier (pas dans une fonction ou un bloc)", imp)
+        m = self.chargeur.resoudre(imp.chemin, self.fichier, imp)
+        if m.chemin in self.chargeur.en_cours:
+            cycle = " -> ".join(os.path.basename(c) for c in self.chargeur.en_cours + [m.chemin])
+            raise self.erreur(f"import circulaire : {cycle}", imp)
+        if not m.verifie:
+            prog = self.chargeur.charger_programme(m)
+            self.chargeur.en_cours.append(m.chemin)
+            try:
+                sous = Verificateur(m.chemin, chargeur=self.chargeur, classes=self.classes)
+                sous.classe_fichier = self.classe_fichier
+                sous.verifier_programme(prog)
+            finally:
+                self.chargeur.en_cours.pop()
+            m.exports = {n: sym for n, sym in sous.racine.symboles.items() if n not in NATIFS and n != "Erreur"}
+            m.verifie = True
+        imp.module = m  # type: ignore[attr-defined]
+        if imp.noms is not None:
+            for nom in imp.noms:
+                if nom not in m.exports:
+                    dispo = ", ".join(sorted(m.exports)) or "aucun"
+                    raise self.erreur(f"le module \"{imp.chemin}\" ne définit pas '{nom}' (disponibles : {dispo})", imp)
+                sym = m.exports[nom]
+                if not sym.initialisee:
+                    raise self.erreur(f"'{nom}' n'a pas de valeur dans le module \"{imp.chemin}\"", imp)
+                self.declarer(nom, sym.type, imp, constante=True)
+        else:
+            alias = imp.alias or m.nom
+            imp.alias = alias
+            self.declarer(alias, TypeModule(m.nom, (), m.chemin), imp, constante=True)
+        return False
 
     def i_Essayer(self, e: Essayer) -> bool:
         termine = self.bloc(e.corps)
@@ -582,10 +634,20 @@ class Verificateur:
             return QUELCONQUE
         raise self.erreur(f"impossible d'indexer une valeur de type {tc}", i)
 
+    def _module_de(self, t: Type) -> Module:
+        return self.chargeur.modules[t.chemin]  # type: ignore[attr-defined]
+
     def e_Membre(self, m: Membre) -> Type:
         t = self.expression(m.objet)
         if t == QUELCONQUE:
             return QUELCONQUE
+        if isinstance(t, TypeModule):
+            mod = self._module_de(t)
+            sym = mod.exports.get(m.nom)
+            if sym is None:
+                dispo = ", ".join(sorted(mod.exports)) or "aucun"
+                raise self.erreur(f"le module '{t.nom}' ne définit pas '{m.nom}' (disponibles : {dispo})", m)
+            return sym.type
         if not isinstance(t, TypeClasse):
             raise self.erreur(f"une valeur de type {t} n'a pas de champ ni de méthode ('.{m.nom}')", m)
         info = self.classes[t.nom]
@@ -630,6 +692,12 @@ class Verificateur:
             sym = self.portee.chercher(a.cible.nom)
             if sym is not None and sym.type == TYPE_META_CLASSE and a.cible.nom in self.classes:
                 return self.e_Construction(a, self.classes[a.cible.nom])
+        if isinstance(a.cible, Membre):
+            t_obj = self.expression(a.cible.objet)
+            if isinstance(t_obj, TypeModule):
+                sym = self._module_de(t_obj).exports.get(a.cible.nom)
+                if sym is not None and sym.type == TYPE_META_CLASSE and a.cible.nom in self.classes:
+                    return self.e_Construction(a, self.classes[a.cible.nom])
         if a.nommes:
             raise self.erreur("les arguments nommés ('nom = valeur') ne sont possibles que pour créer un objet "
                               "(ex : Personne(nom = \"Awa\"))", a.nommes[0][1])

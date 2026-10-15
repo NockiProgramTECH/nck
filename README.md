@@ -139,6 +139,7 @@ nck/
 ├── verificateur.py   # vérification statique des types
 ├── interpreteur.py   # compilation de l'AST en fermetures + exécution
 ├── natifs.py         # fonctions intégrées (ecrire, longueur, ...)
+├── modules.py        # chargement des modules importés
 ├── erreurs.py        # erreurs avec position
 └── cli.py            # commande `nck`
 exemples/             # programmes .nck
@@ -159,5 +160,6 @@ pytest
 - [x] v0.2 — classes typées avec validation (`classe`, `herite`, `soi`, `valider`)
 - [x] v0.3 — gestion des erreurs (`essayer` / `attraper` / `enfin` / `lever`), extension VS Code
 - [x] v0.4 — dictionnaires `dico<K, V>`
-- [ ] `importer` de modules `.nck`, bibliothèque standard (fichiers, JSON, dates)
+- [x] v0.5 — modules (`importer "fichier.nck"`, `comme`, `depuis … importer`)
+- [ ] bibliothèque standard (fichiers, JSON, dates, arguments de la ligne de commande)
 - [ ] réécriture du moteur en C une fois la syntaxe stabilisée

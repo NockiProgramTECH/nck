@@ -67,6 +67,7 @@
         { "name": "keyword.control.loop.nck", "match": "\\b(tantque|pour|dans|arreter|continuer)\\b" },
         { "name": "keyword.control.flow.nck", "match": "\\b(retourner|fin)\\b" },
         { "name": "keyword.control.exception.nck", "match": "\\b(essayer|attraper|enfin|lever)\\b" },
+        { "name": "keyword.control.import.nck", "match": "\\b(importer|depuis|comme)\\b" },
         { "name": "storage.type.nck", "match": "\\b(variable|constante|fonction|classe)\\b" },
         { "name": "storage.modifier.nck", "match": "\\b(herite)\\b" },
         { "name": "variable.language.nck", "match": "\\b(soi)\\b" }

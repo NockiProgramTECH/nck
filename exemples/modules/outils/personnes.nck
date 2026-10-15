@@ -1,0 +1,16 @@
+importer "maths.nck"          // chemin relatif à CE fichier
+
+classe Personne:
+    nom: texte
+    age: entier
+
+    fonction presenter() -> texte:
+        retourner soi.nom + " (" + texte(soi.age) + " ans)"
+    fin
+fin
+
+fonction age_moyen(groupe: liste<Personne>) -> reel:
+    variable ages: liste<reel> = []
+    pour p dans groupe: ajouter(ages, p.age)
+    retourner maths.moyenne(ages)
+fin

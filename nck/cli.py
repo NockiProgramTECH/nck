@@ -1,6 +1,7 @@
 """Ligne de commande : `nck fichier.nck`, `nck verifier fichier.nck`, `nck` (mode interactif)."""
 
 import argparse
+import os
 import sys
 
 from . import __version__, compiler_source, executer_source
@@ -25,7 +26,10 @@ def lire_fichier(chemin: str) -> str:
         sys.exit(2)
 
 
-def afficher_erreur(e: ErreurNck, source: str) -> None:
+def afficher_erreur(e: ErreurNck, source: str, chemin: str | None = None) -> None:
+    if chemin is not None and e.fichier != chemin and os.path.exists(e.fichier):
+        with open(e.fichier, encoding="utf-8") as f:
+            source = f.read()
     print(e.formater(source), file=sys.stderr)
 
 
@@ -34,7 +38,7 @@ def commande_executer(chemin: str) -> int:
     try:
         executer_source(source, chemin)
     except ErreurNck as e:
-        afficher_erreur(e, source)
+        afficher_erreur(e, source, chemin)
         return 1
     except KeyboardInterrupt:
         print("\nInterrompu.", file=sys.stderr)
@@ -49,7 +53,7 @@ def commande_verifier(chemin: str) -> int:
     try:
         compiler_source(source, chemin)
     except ErreurNck as e:
-        afficher_erreur(e, source)
+        afficher_erreur(e, source, chemin)
         return 1
     print(f"✓ {chemin} : aucune erreur")
     return 0

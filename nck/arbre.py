@@ -178,6 +178,13 @@ class Lever(Noeud):
 
 
 @dataclass
+class Importer(Noeud):
+    chemin: str
+    alias: Optional[str]            # importer "x.nck" comme m
+    noms: Optional[list[str]]       # depuis "x.nck" importer a, b
+
+
+@dataclass
 class Retourner(Noeud):
     valeur: Optional[Expr]
 
@@ -193,7 +200,7 @@ class Continuer(Noeud):
 
 
 Instr = (DeclVariable | Affectation | ExprInstr | Bloc | Si | TantQue | Pour
-         | DeclFonction | DeclClasse | Essayer | Lever | Retourner | Arreter | Continuer)
+         | DeclFonction | DeclClasse | Essayer | Lever | Importer | Retourner | Arreter | Continuer)
 
 
 @dataclass

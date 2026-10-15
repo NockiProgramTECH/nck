@@ -41,6 +41,8 @@ def vers_texte(v: object) -> str:
         return v.classe.nom + "(" + ", ".join(f"{k}={_repr_elem(x)}" for k, x in v.champs.items()) + ")"
     if isinstance(v, ClasseNck):
         return f"<classe {v.nom}>"
+    if isinstance(v, ModuleNck):
+        return f"<module {v.nom}>"
     if isinstance(v, FonctionNck):
         return f"<fonction {v.nom}>"
     if isinstance(v, Natif):
@@ -75,6 +77,8 @@ def nom_type_valeur(v: object) -> str:
         return v.classe.nom
     if isinstance(v, ClasseNck):
         return "classe"
+    if isinstance(v, ModuleNck):
+        return "module"
     return type(v).__name__
 
 
@@ -104,6 +108,16 @@ class ObjetNck:
     def __init__(self, classe: ClasseNck, champs: dict):
         self.classe = classe
         self.champs = champs
+
+
+class ModuleNck:
+    """Module importé : donne accès aux déclarations de son fichier."""
+
+    __slots__ = ("nom", "env")
+
+    def __init__(self, nom: str, env):
+        self.nom = nom
+        self.env = env
 
 
 class FonctionNck:

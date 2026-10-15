@@ -35,7 +35,7 @@ age += 1                         // aussi : -=  *=  /=
 Règles :
 - une variable a **toujours** un type, écrit ou déduit ;
 - on ne peut pas changer le type d'une variable (`age = "vingt"` → erreur de type) ;
-- une variable ne peut pas être redéclarée dans la même fonction.
+- une variable ne peut pas être redéclarée dans la même fonction (mais elle peut masquer une fonction native, ex. un paramètre nommé `valeurs`).
 
 Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instructions sur une ligne).
 
@@ -254,7 +254,24 @@ fin
 Les clauses `attraper` sont testées dans l'ordre ; si aucune ne correspond, l'erreur continue de remonter.
 Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : ErreurSolde non attrapée : solde insuffisant`.
 
-## 12. Fonctions natives
+## 12. Modules
+
+Un programme peut être découpé en plusieurs fichiers `.nck`. Les chemins sont relatifs au fichier qui importe.
+
+```
+importer "outils/maths.nck"                  // accessible via le nom du fichier : maths.carre(2)
+importer "outils/maths.nck" comme m          // avec un alias : m.carre(2)
+depuis "outils/maths.nck" importer carre, PI // noms importés directement : carre(2)
+```
+
+- Tout ce qui est déclaré au niveau principal d'un module (fonctions, classes, constantes, variables) est accessible.
+- Un module n'est exécuté **qu'une seule fois**, même s'il est importé par plusieurs fichiers ; son état (variables) est partagé.
+- `importer` doit être au niveau principal du fichier ; les imports circulaires sont refusés.
+- Les variables d'un module ne peuvent pas être modifiées de l'extérieur (`m.compteur = 0` est une erreur) ; passez par une fonction du module.
+- `depuis … importer x` copie la **valeur** de `x` au moment de l'import.
+- Les noms de classes doivent être uniques entre tous les modules d'un programme.
+
+## 13. Fonctions natives
 
 **Entrées / sorties**
 - `ecrire(...)` — affiche les valeurs séparées par un espace
@@ -288,7 +305,7 @@ Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : Erreur
 - `horloge()` → secondes (chronométrage), `attendre(secondes)`, `quitter(code?)`
 - `verifier(condition, message?)` — stoppe le programme si la condition est fausse
 
-## 13. Erreurs
+## 14. Erreurs
 
 Trois familles, toutes avec ligne et colonne :
 
@@ -304,8 +321,8 @@ Erreur d'exécution : division par zéro
 
 Les erreurs de syntaxe et de type sont détectées **avant** d'exécuter la moindre ligne.
 
-## 14. Mots réservés
+## 15. Mots réservés
 
-`variable constante fonction classe herite essayer attraper enfin lever retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
+`variable constante fonction classe herite essayer attraper enfin lever importer depuis comme retourner si sinon tantque pour dans fin arreter continuer et ou non vrai faux nul`
 
 `soi` est défini automatiquement dans les méthodes.

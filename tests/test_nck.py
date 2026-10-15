@@ -283,9 +283,9 @@ def test_natif_mauvais_type():
         compiler_source("majuscule(1)")
 
 
-def test_natif_non_redefinissable():
-    with pytest.raises(ErreurType, match="native"):
-        compiler_source("variable ecrire = 1")
+def test_natif_masquable():
+    # Une variable peut masquer un natif (comme en TypeScript) ; le natif redevient visible hors de la portée.
+    assert run("fonction f(valeurs: liste<entier>) -> entier: retourner longueur(valeurs)\necrire(f([1, 2]), valeurs({1: 2}))") == "2 [2]\n"
 
 
 # ---------- exemples du dépôt ----------
@@ -531,3 +531,50 @@ def test_dico_erreurs_execution():
 def test_exemple_dictionnaires():
     source = (RACINE / "exemples" / "dictionnaires.nck").read_text(encoding="utf-8")
     assert '{"le": 3, "chat": 1, "et": 2, "chien": 1, "rat": 1}' in run(source)
+
+
+# ---------- modules ----------
+
+def test_modules(tmp_path):
+    (tmp_path / "outils").mkdir()
+    (tmp_path / "outils" / "maths.nck").write_text(
+        'constante PI = 3.14\nfonction carre(x: entier) -> entier: retourner x * x\n'
+        'variable compteur = 0\nfonction inc(): compteur += 1\n'
+        'classe Point:\n    x: entier\n    fonction double() -> entier: retourner soi.x * 2\nfin\n', encoding="utf-8")
+    (tmp_path / "outils" / "geo.nck").write_text(
+        'importer "maths.nck"\nfonction aire(r: entier) -> reel: retourner maths.PI * maths.carre(r)\n', encoding="utf-8")
+    principal = tmp_path / "principal.nck"
+    src = (
+        'importer "outils/maths.nck"\n'
+        'importer "outils/geo.nck" comme g\n'
+        'depuis "outils/maths.nck" importer PI, carre\n'
+        'maths.inc()\nmaths.inc()\n'
+        'ecrire(maths.carre(3), carre(4), PI, maths.compteur, g.aire(1))\n'
+        'variable p = maths.Point(5)\necrire(p.double(), p, type_de(maths))\n'
+    )
+    principal.write_text(src, encoding="utf-8")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        executer_source(src, str(principal))
+    assert buf.getvalue() == "9 16 3.14 2 3.14\n10 Point(x=5) module\n"
+
+
+def test_modules_erreurs(tmp_path):
+    (tmp_path / "m.nck").write_text("constante X = 1\nclasse C:\n    v: entier\nfin\n", encoding="utf-8")
+    (tmp_path / "a.nck").write_text('importer "b.nck"\n', encoding="utf-8")
+    (tmp_path / "b.nck").write_text('importer "a.nck"\n', encoding="utf-8")
+    f = str(tmp_path / "t.nck")
+
+    def check(src, motif):
+        with pytest.raises(ErreurType, match=motif):
+            compiler_source(src, f)
+
+    check('importer "inexistant.nck"', "module introuvable")
+    check('importer "a.nck"', "import circulaire : a.nck -> b.nck -> a.nck")
+    check('importer "m.nck"\necrire(m.Y)', "ne définit pas 'Y' \\(disponibles : C, X\\)")
+    check('importer "m.nck"\nm.X = 2', "impossible de modifier 'X'")
+    check('fonction f(): importer "m.nck"', "niveau principal")
+    check('depuis "m.nck" importer Z', "ne définit pas 'Z'")
+    check('importer "m.txt"', "fichier .nck")
+    check('importer "m.nck"\nclasse C:\n    w: entier\nfin', "définie à la fois")
+    check('importer "m.nck"\necrire(m.X + "a")', "additionner un entier et un texte")
