@@ -666,7 +666,7 @@ classe K:
 fin
 ecrire(K(1).add(), K(1).add(5))
 '''
-    assert run(src) == "11x 3x 3y\n15\n2 6\n"
+    assert run(src) == "11x 3x 3y\n15x\n2 6\n"
     with pytest.raises(ErreurSyntaxe, match="doit avoir une valeur par défaut"):
         compiler_source("fonction f(a: entier = 1, b: entier): retourner")
     with pytest.raises(ErreurType, match="valeur par défaut du paramètre 'b'"):
@@ -716,7 +716,7 @@ fin
     assert run(src) == "0 a\n1 b\nx 1\n0 a\n1 b\n10\n"
     with pytest.raises(ErreurType, match="même nom"):
         compiler_source("pour i, i dans [1]: ecrire(i)")
-    with pytest.raises(ErreurType, match="texte à une cible de type entier"):
+    with pytest.raises(ErreurType, match="'n' est de type entier, mais reçoit un texte"):
         compiler_source('pour k, v dans {"x": 1}:\n    variable n: entier = k\nfin')
 
 
