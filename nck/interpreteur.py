@@ -124,7 +124,7 @@ class Interpreteur:
         ancienne_limite = sys.getrecursionlimit()
         sys.setrecursionlimit(max(ancienne_limite, self.limite_recursion * 12 + 500))
         try:
-            corps(self.global_env)
+            self._executer_avec_pile(corps)
         except Levee as l:
             o = l.objet
             nom = o.classe.nom
@@ -135,6 +135,32 @@ class Interpreteur:
             raise ErreurExecution("récursion trop profonde (dépassement de pile)", 0, 0, self.fichier) from None
         finally:
             sys.setrecursionlimit(ancienne_limite)
+
+    def _executer_avec_pile(self, corps: "Fn") -> None:
+        """Exécute le programme ; sous Windows avec Python < 3.12, la pile C du fil principal (1 Mo) ne suffit pas
+        pour 2000 appels NCK imbriqués : on exécute alors dans un fil doté d'une grande pile."""
+        if not (sys.platform == "win32" and sys.version_info < (3, 12)):
+            corps(self.global_env)
+            return
+        import threading
+        resultat: list[BaseException | None] = [None]
+
+        def cible() -> None:
+            try:
+                corps(self.global_env)
+            except BaseException as e:  # noqa: BLE001 — relancée dans le fil principal
+                resultat[0] = e
+
+        ancienne = threading.stack_size()
+        threading.stack_size(512 * 1024 * 1024)
+        try:
+            fil = threading.Thread(target=cible, name="nck")
+            fil.start()
+            fil.join()
+        finally:
+            threading.stack_size(ancienne)
+        if resultat[0] is not None:
+            raise resultat[0]
 
     # ----- instructions -----
 
