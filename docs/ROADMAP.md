@@ -2,6 +2,10 @@
 
 État au 16 octobre 2026 : **v0.13.0 en développement, non publiée** (gestionnaire de paquets implémenté ; registre public à déployer).
 La version de référence précédente est la v0.12.0.
+
+**Plateformes prioritaires : Linux et Windows.** Les releases et la matrice de tests
+macOS sont reportées ; elles seront réactivées après validation de cette plateforme.
+Les workflows actuels construisent Linux x64/arm64 et Windows x64 (+ Setup).
 Historique de ce qui est fait : [CHANGELOG.md](changelog.md).
 
 Principe directeur inchangé : **rapide à prendre en main, simple, typé, en français**. Chaque version livre sa documentation,

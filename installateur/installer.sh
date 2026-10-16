@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Installateur NCK pour Linux et macOS — aucun Python requis.
+# Installateur NCK pour Linux — aucun Python requis (releases macOS reportées).
 #   curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh | sh
 # Variables : NCK_VERSION (défaut : dernière), NCK_PREFIX (défaut : ~/.nck), NCK_BIN (défaut : ~/.local/bin)
 set -e
@@ -9,7 +9,11 @@ BIN="${NCK_BIN:-$HOME/.local/bin}"
 
 case "$(uname -s)" in
   Linux)  SYS=linux ;;
-  Darwin) SYS=macos ;;
+  Darwin)
+    echo "Les releases macOS sont reportées ; cet installateur automatique prend en charge Linux uniquement." >&2
+    echo "Sur macOS, utilisez Python 3.10+ et l'installation depuis les sources (voir docs/INSTALLATION.md)." >&2
+    exit 1
+    ;;
   *) echo "Système non pris en charge : $(uname -s). Utilisez : pip install git+https://github.com/$DEPOT" ; exit 1 ;;
 esac
 case "$(uname -m)" in

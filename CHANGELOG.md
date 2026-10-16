@@ -1,6 +1,9 @@
 # Journal des modifications
 
 ## 0.13.0 — gestionnaire de paquets (non publiée)
+- Correctif Windows : contrôle des noms bruts des entrées ZIP avant la normalisation des antislashs et la troncature des NUL par Python ; fixtures de sécurité identiques sur toutes les plateformes.
+- Documentation : construction sur les branches de travail, publication GitHub Pages uniquement depuis `main` ; concurrence isolée par branche pour ne pas interrompre un déploiement de production.
+- Plateformes : releases officielles Linux x64/arm64 et Windows x64 (+ Setup) ; macOS reporté et retiré des matrices de release/tests. L'installateur shell signale explicitement ce report sur macOS, avant tout téléchargement ou modification.
 - Projets `paquet.json` et commandes `nck init`, `nck installer [nom[@version]]`, `nck desinstaller nom`, `nck paquets`.
 - Index JSON local ou HTTPS, configurable par `--index` / `NCK_INDEX` ; archives ZIP 100 % NCK avec contrôle SHA-256, validation des chemins et limites de taille. Aucun script d’installation exécuté.
 - Résolution des dépendances transitives avec retour sur les versions antérieures en cas de conflit ; contraintes exactes, `*`, `^` et `~`.

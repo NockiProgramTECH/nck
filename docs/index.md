@@ -36,7 +36,7 @@ Bonjour, je suis Issa (0 ans)
 
     ---
 
-    Un installateur pour Windows, Linux et macOS — sans Python.
+    Un installateur pour Windows et Linux — sans Python. Exécutables macOS reportés.
 
     [:octicons-arrow-right-24: Installation](INSTALLATION.md)
 
@@ -74,7 +74,7 @@ Bonjour, je suis Issa (0 ans)
 | **Sûr** | Les types sont vérifiés avant d'exécuter la première ligne : `age = "vingt"` est refusé avec la ligne et la colonne. |
 | **Complet** | Classes, héritage, énumérations, erreurs `essayer`/`attraper`, modules, fonctions anonymes, dictionnaires, JSON, fichiers, dates. |
 | **Outillé** | Extension VS Code (coloration, erreurs en direct, autocomplétion, survol, `F5`), REPL, vérificateur `nck verifier`. |
-| **Portable** | Un seul exécutable `nck` ; fichiers `.nck` ; mêmes résultats sur Windows, Linux et macOS. |
+| **Portable** | Exécutables officiels Windows et Linux ; fichiers `.nck` ; support autonome macOS reporté. |
 
 ## En trois commandes
 

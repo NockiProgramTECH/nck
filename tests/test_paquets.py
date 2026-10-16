@@ -200,11 +200,14 @@ def test_sha_incorrect_pas_de_modifications(projet, registre):
 
 
 @pytest.mark.parametrize('chemin', ['../intrus.nck', '/intrus.nck', 'a/../../intrus.nck',
-                                     'a\\intrus.nck', 'C:/intrus.nck', 'a//intrus.nck'])
+                                     'a\\intrus.nck', 'C:/intrus.nck', 'a//intrus.nck', 'module.nck\x00cache'])
 def test_zip_traversee_interdite(tmp_path, chemin):
     contenu = io.BytesIO()
     with zipfile.ZipFile(contenu, 'w') as z:
-        z.writestr(chemin, 'ecrire(1)')
+        # Ne pas laisser ZipInfo normaliser la fixture sur l'hôte Windows.
+        info = zipfile.ZipInfo('nom-provisoire')
+        info.filename = info.orig_filename = chemin
+        z.writestr(info, 'ecrire(1)')
     with pytest.raises(p.ErreurPaquet, match='chemin de paquet interdit'):
         p._extraire(contenu.getvalue(), tmp_path / 'extraction')
     assert not (tmp_path / 'intrus.nck').exists()
@@ -475,3 +478,21 @@ def test_cache_partage_import_fichier_et_nom_paquet(projet, registre, capsys, or
         imports.reverse()
     executer_source('\n'.join(imports) + '\necrire(module.X, maths_plus.X)', str(projet / 'main.nck'))
     assert capsys.readouterr().out == 'charge\n42 42\n'
+
+
+def test_zip_nom_original_verifie_apres_normalisation_windows(tmp_path, monkeypatch):
+    contenu = io.BytesIO()
+    with zipfile.ZipFile(contenu, 'w') as z:
+        info = zipfile.ZipInfo('nom-provisoire')
+        info.filename = info.orig_filename = 'a\\intrus.nck'
+        z.writestr(info, 'ecrire(1)')
+    initialiser = zipfile.ZipInfo.__init__
+
+    def simuler_windows(self, filename='NoName', date_time=(1980, 1, 1, 0, 0, 0)):
+        initialiser(self, filename, date_time)
+        self.filename = self.filename.replace('\\', '/')
+
+    monkeypatch.setattr(zipfile.ZipInfo, '__init__', simuler_windows)
+    with pytest.raises(p.ErreurPaquet, match='chemin de paquet interdit'):
+        p._extraire(contenu.getvalue(), tmp_path / 'extraction')
+    assert not (tmp_path / 'extraction').exists()

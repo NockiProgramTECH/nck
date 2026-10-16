@@ -41,9 +41,13 @@ ton nombre est petit ou égal à 20
 |---|---|
 | Windows | Téléchargez **`NCK-Setup-<version>.exe`** dans les [Releases](https://github.com/NockiProgramTECH/nck/releases) et suivez l'assistant (PATH, fichiers `.nck`, extension VS Code) |
 | Windows (terminal) | `irm https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.ps1 \| iex` |
-| Linux / macOS | `curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh \| sh` |
+| Linux | `curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh \| sh` |
 
 Puis, dans un nouveau terminal : `nck info`.
+
+**Releases officielles : Linux x64/arm64 et Windows x64.** Le support des exécutables
+macOS est reporté ; l'installation depuis les sources avec Python reste possible,
+mais n'est pas validée sur macOS par la CI actuelle.
 
 Pour les développeurs (Python 3.10+) : `git clone … && cd nck && pip install -e .`
 

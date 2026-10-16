@@ -75,10 +75,18 @@ git tag v0.13.0
 git push origin v0.13.0
 ```
 
-GitHub Actions (`.github/workflows/release.yml`) construit Linux x64/arm64, Windows x64 (+ Setup), macOS x64/arm64,
+GitHub Actions (`.github/workflows/release.yml`) construit Linux x64/arm64 et Windows x64 (+ Setup),
 teste chaque exécutable avec ce scénario et publie la Release uniquement si toutes
 les constructions et validations réussissent. Un lancement manuel du workflow
 construit les artefacts sans publier de release (absence de tag).
+
+### Plateformes prises en charge
+
+Les releases et les tests automatiques ciblent actuellement **Linux et Windows**.
+Les exécutables macOS sont reportés et ne bloquent plus la publication.
+Il n'est pas nécessaire de posséder un Mac pour utiliser un runner GitHub macOS,
+mais leur réactivation attendra une validation de cette plateforme. La construction
+manuelle depuis les sources reste possible, sans garantie de support macOS.
 
 ## Préparer une bibliothèque NCK
 
@@ -99,8 +107,8 @@ mkdocs serve          # aperçu local sur http://127.0.0.1:8000
 mkdocs build          # → site/
 ```
 
-Le site est publié automatiquement sur GitHub Pages par `.github/workflows/docs.yml` à chaque modification de `docs/`
-ou `mkdocs.yml`. Tous les blocs `nck` de la documentation sont vérifiés et exécutés par `outils/verifier_doc.py` (en CI aussi).
+Le workflow `.github/workflows/docs.yml` construit et vérifie la documentation sur `main` et les branches `arena/**`.
+Seule la branche `main` peut publier le site sur GitHub Pages ; les branches de travail ne déclenchent aucun déploiement. Tous les blocs `nck` de la documentation sont vérifiés et exécutés par `outils/verifier_doc.py` (en CI aussi).
 
 ### Nom de domaine personnalisé
 

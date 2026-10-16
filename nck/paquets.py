@@ -176,7 +176,10 @@ def _extraire(contenu: bytes, destination: Path) -> dict:
                 raise ErreurPaquet("archive trop volumineuse après décompression")
             vus = set()
             for info in infos:
-                nom = info.filename.rstrip('/') if info.is_dir() else info.filename
+                # ZipInfo normalise les antislashs sur Windows et tronque les NUL.
+                # Contrôler le nom original avant toute normalisation par Python.
+                brut = info.orig_filename
+                nom = brut[:-1] if brut.endswith('/') else brut
                 relatif = chemin_sur(nom)
                 cle = nom.casefold()
                 if cle in vus:
