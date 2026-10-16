@@ -1,0 +1,20 @@
+fonction additionner(a: entier, b: entier) -> entier:
+    retourner a + b
+fin
+
+fonction factorielle(n: entier) -> entier:
+    si (n <= 1): retourner 1
+    retourner n * factorielle(n - 1)
+fin
+
+fonction saluer(nom: texte):
+    ecrire("Salut " + nom + " !")
+fin
+
+ecrire(additionner(2, 3))
+ecrire("5! =", factorielle(5))
+saluer("Awa")
+
+// Les fonctions sont des valeurs
+variable f: fonction<entier, entier, entier> = additionner
+ecrire(f(10, 5))

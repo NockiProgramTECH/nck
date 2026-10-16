@@ -1,0 +1,13 @@
+// Module de fonctions mathématiques
+constante PI = 3.141592653589793
+
+fonction carre(x: reel) -> reel: retourner x * x
+
+fonction aire_cercle(rayon: reel) -> reel:
+    retourner PI * carre(rayon)
+fin
+
+fonction moyenne(valeurs: liste<reel>) -> reel:
+    si (longueur(valeurs) == 0): lever "moyenne d'une liste vide"
+    retourner somme(valeurs) / longueur(valeurs)
+fin

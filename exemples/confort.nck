@@ -1,0 +1,48 @@
+// Textes formatés : f"..." avec des expressions entre { }
+variable nom = "Awa"
+variable age = 20
+ecrire(f"Bonjour {nom}, tu auras {age + 1} ans l'année prochaine.")
+ecrire(f"{nom} en majuscules : {majuscule(nom)} ; accolades littérales : {{ok}}")
+
+// Paramètres par défaut
+fonction saluer(nom: texte, salutation: texte = "Bonjour", ponctuation: texte = "!") -> texte:
+    retourner f"{salutation} {nom}{ponctuation}"
+fin
+ecrire(saluer("Ali"))
+ecrire(saluer("Ali", "Salut"))
+ecrire(saluer("Ali", "Bonsoir", "..."))
+
+// selon / cas : plus lisible qu'une cascade de si/sinon si
+fonction nom_du_jour(n: entier) -> texte:
+    selon (n):
+        cas 1: retourner "lundi"
+        cas 2: retourner "mardi"
+        cas 3: retourner "mercredi"
+        cas 4: retourner "jeudi"
+        cas 5: retourner "vendredi"
+        cas 6, 7:
+            retourner "week-end"
+        sinon:
+            lever f"jour invalide : {n}"
+    fin
+fin
+pour n dans intervalle(1, 8): ecrire(n, "->", nom_du_jour(n))
+
+variable commande = "aide"
+selon (commande):
+    cas "aide", "?": ecrire("Commandes : aide, quitter")
+    cas "quitter": ecrire("Au revoir")
+    sinon: ecrire(f"commande inconnue : {commande}")
+fin
+
+// pour avec indice + élément, ou clé + valeur
+variable fruits = ["mangue", "banane", "papaye"]
+pour i, fruit dans fruits: ecrire(f"{i + 1}. {fruit}")
+
+variable stock = {"mangue": 12, "banane": 0}
+pour fruit, quantite dans stock:
+    selon (quantite):
+        cas 0: ecrire(f"{fruit} : rupture de stock")
+        sinon: ecrire(f"{fruit} : {quantite} en stock")
+    fin
+fin

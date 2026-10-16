@@ -1,0 +1,99 @@
+site_name: NCK — Documentation
+site_description: Documentation complète du langage de programmation NCK — simple, typé et en français.
+site_url: https://nockiprogramtech.github.io/nck/
+repo_url: https://github.com/NockiProgramTECH/nck
+repo_name: NockiProgramTECH/nck
+edit_uri: edit/main/docs/
+copyright: NCK — licence MIT
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: fr
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle: { icon: material/weather-night, name: Mode sombre }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: Mode clair }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.details
+  - pymdownx.highlight: { anchor_linenums: true, use_pygments: true }
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed: { alternate_style: true }
+  - pymdownx.keys
+  - pymdownx.snippets: { base_path: ["."] }
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search: { lang: fr }
+
+nav:
+  - Accueil: index.md
+  - Démarrer:
+      - Installation: INSTALLATION.md
+      - Premier programme: tutoriel/premier-programme.md
+      - Tutoriel en 30 minutes: tutoriel/tutoriel.md
+      - Venir de Python ou JavaScript: tutoriel/depuis-python-js.md
+  - Guide du langage:
+      - guide/index.md
+      - Variables, constantes et types: guide/variables-types.md
+      - Opérateurs et expressions: guide/operateurs.md
+      - Textes: guide/textes.md
+      - Conditions: guide/conditions.md
+      - Boucles: guide/boucles.md
+      - Fonctions: guide/fonctions.md
+      - Listes: guide/listes.md
+      - Dictionnaires: guide/dictionnaires.md
+      - Types optionnels et nul: guide/optionnels.md
+      - Classes et objets: guide/classes.md
+      - Énumérations: guide/enumerations.md
+      - Gestion des erreurs: guide/erreurs.md
+      - Modules: guide/modules.md
+      - Fichiers, JSON et dates: guide/fichiers-json-dates.md
+      - Style et bonnes pratiques: guide/style.md
+  - Référence:
+      - Référence du langage: LANGAGE.md
+      - Fonctions natives: NATIFS.md
+      - Mots réservés et grammaire: guide/grammaire.md
+      - Messages d'erreur: guide/messages-erreur.md
+  - Outils:
+      - Ligne de commande nck: outils/cli.md
+      - Mode interactif (REPL): outils/repl.md
+      - Visual Studio Code: EDITEUR.md
+      - Construire et publier: outils/publier.md
+  - Exemples:
+      - exemples/index.md
+  - Projet:
+      - Feuille de route: ROADMAP.md
+      - Journal des modifications: changelog.md
+      - FAQ: faq.md

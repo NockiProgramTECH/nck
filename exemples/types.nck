@@ -1,0 +1,20 @@
+/* NCK est typé statiquement : les erreurs sont détectées AVANT l'exécution. */
+variable age: entier = 25
+variable prix: reel = 19.99
+variable actif: booleen = vrai
+variable notes: liste<reel> = [12.5, 15, 9]
+constante PI = 3.14159
+
+// Inférence : pas besoin d'écrire le type
+variable message = "âge : " + texte(age)
+ecrire(message)
+ecrire("moyenne :", somme(notes) / longueur(notes))
+ecrire("type de prix :", type_de(prix))
+
+// `quelconque` accepte tout, et la vérification se fait alors à l'exécution
+variable n_importe: quelconque = "texte"
+n_importe = 42
+ecrire(n_importe + 1)
+
+// Décommentez pour voir une erreur de type à la compilation :
+// age = "vingt-cinq"

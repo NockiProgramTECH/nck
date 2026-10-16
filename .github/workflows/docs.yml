@@ -1,0 +1,47 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main, "arena/**"]
+    paths: ["docs/**", "mkdocs.yml", "outils/**", "CHANGELOG.md", ".github/workflows/docs.yml", "nck/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dépendances
+        run: pip install -e . mkdocs-material ./outils/pygments_nck
+      - name: Vérifier les exemples de la documentation
+        run: python outils/verifier_doc.py
+      - name: Construire le site
+        run: mkdocs build --strict
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4

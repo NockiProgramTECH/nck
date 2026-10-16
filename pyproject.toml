@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nck-lang"
+dynamic = ["version"]
+description = "NCK — un langage de programmation simple, typé et en français (fichiers .nck)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "NockiProgramTECH" }]
+keywords = ["langage", "programmation", "interpreteur", "francais", "nck"]
+
+[project.scripts]
+nck = "nck.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.dynamic]
+version = { attr = "nck.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["nck*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

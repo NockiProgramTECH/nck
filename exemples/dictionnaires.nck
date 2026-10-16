@@ -1,0 +1,34 @@
+// Dictionnaires : associations clé -> valeur
+variable ages: dico<texte, entier> = {"Awa": 20, "Ali": 25}
+ages["Issa"] = 22                      // ajout
+ages["Awa"] += 1                       // modification
+
+ecrire(ages)                           // {"Awa": 21, "Ali": 25, "Issa": 22}
+ecrire("Ali a", ages["Ali"], "ans")
+ecrire("taille :", longueur(ages), "| contient Awa ?", contient(ages, "Awa"))
+
+pour nom dans ages:                    // parcourt les clés
+    ecrire("-", nom, "->", ages[nom])
+fin
+
+ecrire(cles(ages), valeurs(ages), somme(valeurs(ages)))
+ecrire(obtenir(ages, "Zoe", 0))        // valeur par défaut si la clé n'existe pas
+ecrire(retirer(ages, "Ali"), ages)
+
+// Compter des mots (type déduit : dico<texte, entier>)
+variable compte = {}
+pour mot dans decouper("le chat et le chien et le rat"):
+    compte[mot] = obtenir(compte, mot, 0) + 1
+fin
+ecrire(compte)
+
+// Clés entières et valeurs complexes
+variable classes: dico<entier, liste<texte>> = {6: ["Awa"], 5: []}
+ajouter(classes[6], "Ali")
+ecrire(classes, fusionner({1: ["a"]}, classes))
+
+// Erreurs détectées à la compilation :
+// ages[3]                     -> la clé doit être un texte, mais c'est un entier
+// ages["X"] = "vingt"         -> impossible d'affecter un texte à une cible de type entier
+// Et à l'exécution :
+// ecrire(ages["Zoe"])         -> clé "Zoe" introuvable dans le dictionnaire

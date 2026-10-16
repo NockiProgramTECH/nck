@@ -1,0 +1,17 @@
+// Modules : découper un programme en plusieurs fichiers .nck
+importer "outils/maths.nck"                    // accessible via `maths.`
+importer "outils/personnes.nck" comme pers     // avec un alias
+depuis "outils/maths.nck" importer PI, carre   // noms importés directement
+
+ecrire("aire d'un cercle de rayon 2 :", arrondir(maths.aire_cercle(2), 2))
+ecrire(PI, carre(3))
+
+variable groupe = [pers.Personne("Awa", 20), pers.Personne("Ali", 30)]
+pour p dans groupe: ecrire(p.presenter())
+ecrire("âge moyen :", pers.age_moyen(groupe))
+
+essayer:
+    ecrire(maths.moyenne([]))
+attraper e:
+    ecrire("erreur du module :", e.message)
+fin

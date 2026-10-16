@@ -1,0 +1,21 @@
+variable total = 0
+pour i dans intervalle(1, 11):
+    si (i % 2 == 0): continuer
+    total += i
+fin
+ecrire("somme des impairs de 1 à 10 :", total)
+
+variable fruits: liste<texte> = ["mangue", "banane", "papaye"]
+ajouter(fruits, "ananas")
+pour fruit dans fruits:
+    ecrire("-", majuscule(fruit))
+fin
+
+variable compteur = 0
+tantque (vrai):
+    compteur = compteur + 1
+    si (compteur >= 3): arreter
+fin
+ecrire("compteur =", compteur, "| longueur =", longueur(fruits))
+
+pour lettre dans "nck": ecrire(lettre)

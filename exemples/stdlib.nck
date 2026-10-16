@@ -1,0 +1,38 @@
+// Bibliothèque standard : fichiers, JSON, dates, système
+classe Tache:
+    titre: texte
+    faite: booleen = faux
+fin
+
+variable taches = [Tache("Apprendre NCK"), Tache("Écrire un programme", vrai)]
+
+// --- JSON ---
+variable json = vers_json(taches, vrai)
+ecrire(json)
+variable donnees = depuis_json(json)           // quelconque : liste de dicos
+pour t dans donnees: ecrire("-", t["titre"], "| faite :", t["faite"])
+
+// --- Fichiers ---
+constante CHEMIN = joindre_chemin(dossier_courant(), "taches.json")
+ecrire_fichier(CHEMIN, json)
+ecrire("fichier créé :", fichier_existe(CHEMIN), "|", longueur(lire_lignes(CHEMIN)), "lignes")
+ajouter_fichier(CHEMIN, "\n")
+supprimer_fichier(CHEMIN)
+
+essayer:
+    ecrire(lire_fichier("inexistant.txt"))
+attraper e:
+    ecrire("erreur attrapée :", e.message)
+fin
+
+// --- Dates ---
+variable d = date()
+ecrire(formater("Nous sommes le {}/{}/{}", remplir_gauche(texte(d["jour"]), 2, "0"), d["mois"], d["annee"]))
+ecrire(formater_date("AAAA-MM-JJ"))
+variable noel = creer_date(2026, 12, 25)
+ecrire("jours avant Noël :", entier((noel - maintenant()) / 86400))
+
+// --- Système ---
+ecrire("arguments :", arguments())
+ecrire("HOME =", variable_env("HOME", "?"))
+ecrire(est_nombre("3.5"), est_entier("42"), est_nombre("abc"))

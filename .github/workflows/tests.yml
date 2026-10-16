@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e .[dev] pytest-github-actions-annotate-failures
+      - name: Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -x --tb=short 2>&1 | tee sortie_tests.txt || {
+            tail -n 12 sortie_tests.txt | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+      - name: Vérifier les exemples
+        shell: bash
+        run: |
+          for f in exemples/*.nck exemples/*/*.nck; do python -m nck verifier "$f"; done
+      - name: Exemples de la documentation
+        run: python outils/verifier_doc.py
