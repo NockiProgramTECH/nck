@@ -26,3 +26,5 @@ jobs:
         shell: bash
         run: |
           for f in exemples/*.nck exemples/*/*.nck; do python -m nck verifier "$f"; done
+      - name: Exemples de la documentation
+        run: python outils/verifier_doc.py

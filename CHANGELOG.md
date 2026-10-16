@@ -1,6 +1,7 @@
 # Journal des modifications
 
 ## 0.12.0 — installation sans Python
+- Site de documentation complet (MkDocs Material, `mkdocs.yml`, `docs/`) publié sur GitHub Pages par `docs.yml` : tutoriel, guide du langage en 15 chapitres, référence, outils, exemples, FAQ ; coloration NCK (`outils/pygments_nck`) ; tous les extraits sont vérifiés et exécutés par `outils/verifier_doc.py`.
 - Exécutable autonome `nck` (PyInstaller, `installateur/construire.py` + `nck.spec`) : Python embarqué, exemples, docs et extension VS Code inclus.
 - **Windows** : `NCK-Setup-<version>.exe` (Inno Setup, `installateur/windows/nck.iss`) — ajout au PATH, association des fichiers `.nck` avec icône, menu contextuel « Exécuter / Vérifier avec NCK », installation optionnelle de l'extension VS Code, désinstallateur propre.
 - **Linux / macOS** : `installateur/installer.sh` (téléchargement de la release, `~/.nck`, lien dans `~/.local/bin`, PATH, extension VS Code) ; `installateur/installer.ps1` pour Windows en ligne de commande.

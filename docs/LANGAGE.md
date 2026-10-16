@@ -3,7 +3,7 @@
 NCK est un langage **simple**, **typé statiquement** (comme TypeScript) et dont les mots-clés sont
 en **français**. Les fichiers portent l'extension `.nck`.
 
-```
+```nck
 nck programme.nck            # exécute
 nck verifier programme.nck   # vérifie syntaxe + types sans exécuter
 nck                          # mode interactif (REPL)
@@ -13,7 +13,7 @@ nck                          # mode interactif (REPL)
 
 ## 1. Commentaires
 
-```
+```nck
 // commentaire sur une ligne
 # aussi un commentaire
 /* commentaire
@@ -22,7 +22,7 @@ nck                          # mode interactif (REPL)
 
 ## 2. Variables et constantes
 
-```
+```nck
 variable age: entier = 25        // type explicite
 variable nom = "Awa"             // type déduit : texte
 variable total: reel             // déclarée sans valeur (doit être affectée avant usage)
@@ -41,7 +41,7 @@ Les instructions se terminent par une fin de ligne ou un `;` (plusieurs instruct
 
 ### Déclaration et affectation multiples
 
-```
+```nck
 variable a, b = 1, "deux"        // chaque variable prend le type de sa valeur
 a, b = 2, "trois"
 x, y = y, x                      // échange en une ligne
@@ -55,7 +55,7 @@ variable bas, haut = bornes([3, 7, 5])
 
 ### Textes multi-lignes
 
-```
+```nck
 variable aide = """
     Usage : nck fichier.nck
       -v  affiche la version
@@ -87,7 +87,7 @@ n'est implicite : utilisez `texte(x)`, `entier(x)`, `reel(x)`, `booleen(x)`.
 
 **Textes formatés** : préfixe `f`, expressions entre accolades, `{{` et `}}` pour des accolades littérales.
 
-```
+```nck
 ecrire(f"Bonjour {nom}, tu as {age + 1} ans ({majuscule(nom)})")
 ```
 
@@ -97,7 +97,7 @@ Une variable d'un type précis ne peut **jamais** valoir `nul` : `variable n: te
 
 Le vérificateur interdit d'utiliser un `T?` comme un `T` tant qu'il n'a pas été testé :
 
-```
+```nck
 variable prenom: texte? = nul
 ecrire(longueur(prenom))          // erreur : texte? (la valeur peut être nul…)
 
@@ -133,7 +133,7 @@ Priorité (du plus faible au plus fort) : `??` < `ou` < `et` < `non` < comparais
 
 Un bloc commence par `:`. Deux formes :
 
-```
+```nck
 // forme courte : une seule instruction sur la même ligne
 si (x > 0): ecrire("positif")
 
@@ -148,7 +148,7 @@ Les parenthèses autour des conditions sont facultatives.
 
 ## 6. Conditions
 
-```
+```nck
 si (note >= 16):
     ecrire("très bien")
 sinon si (note >= 10):
@@ -165,7 +165,7 @@ La condition doit être un `booleen` (pas `si (3)`).
 ### Expression conditionnelle `si … alors … sinon …`
 
 Pour choisir une **valeur** (et non exécuter un bloc) :
-```
+```nck
 variable statut = si age >= 18 alors "majeur" sinon "mineur"
 ecrire(si nom != nul alors nom.majuscule() sinon "inconnu")   // le type nul est affiné dans la branche 'alors'
 ```
@@ -173,7 +173,7 @@ Le `sinon` est obligatoire ; les deux branches doivent avoir des types compatibl
 
 ### `selon` / `cas`
 
-```
+```nck
 selon (jour):
     cas 1: ecrire("lundi")
     cas 6, 7:                      // plusieurs valeurs
@@ -187,7 +187,7 @@ Les valeurs des `cas` sont comparées avec `==` au sujet (nombres, textes, bool�
 
 ## 7. Boucles
 
-```
+```nck
 tantque (i < 10):
     i += 1
 fin
@@ -208,7 +208,7 @@ pour cle, valeur dans ages:       // clé + valeur (dictionnaire)
 
 ## 8. Dictionnaires
 
-```
+```nck
 variable ages: dico<texte, entier> = {"Awa": 20, "Ali": 25}
 ages["Issa"] = 22                     // ajout ou modification
 ages["Awa"] += 1
@@ -228,7 +228,7 @@ ecrire(cles(ages), valeurs(ages))
 
 ## 9. Fonctions
 
-```
+```nck
 fonction additionner(a: entier, b: entier) -> entier:
     retourner a + b
 fin
@@ -253,7 +253,7 @@ Les paramètres avec valeur par défaut doivent être placés en dernier ; la va
 - une fonction peut être appelée avant sa définition dans le même bloc ;
 - les fonctions sont des valeurs : on peut les passer en argument ou les retourner (fermetures).
 
-```
+```nck
 fonction appliquer(f: fonction<entier, entier>, x: entier) -> entier: retourner f(x)
 fonction double(n: entier) -> entier: retourner n * 2
 ecrire(appliquer(double, 21))   // 42
@@ -263,7 +263,7 @@ ecrire(appliquer(double, 21))   // 42
 
 `fonction(paramètres) -> retour: corps` crée une fonction sans nom, utilisable comme n'importe quelle valeur. Trois formes :
 
-```
+```nck
 variable double = fonction(x: entier) -> entier: retourner x * 2    // instruction courte
 variable triple = fonction(x: entier): x * 3                        // expression : retour implicite
 variable somme = fonction(a: entier, b: entier):                    // bloc
@@ -274,7 +274,7 @@ fin
 
 Quand le contexte connaît le type attendu, les types des paramètres (et du retour) se déduisent tout seuls :
 
-```
+```nck
 variable nombres = [1, 2, 3, 4, 5, 6]
 ecrire(appliquer(nombres, fonction(x): x * 2))          // [2, 4, 6, 8, 10, 12]
 ecrire(filtrer(nombres, fonction(x): x % 2 == 0))       // [2, 4, 6]
@@ -293,7 +293,7 @@ Sans contexte (`variable f = fonction(x): …`), il faut écrire le type du para
 Une classe regroupe des **champs typés** (avec valeur par défaut facultative) et des **méthodes**.
 Le constructeur est généré automatiquement à partir des champs, comme avec Pydantic.
 
-```
+```nck
 classe Personne:
     nom: texte
     age: entier = 0                       // champ facultatif grâce à la valeur par défaut
@@ -327,7 +327,7 @@ ecrire(awa)                               // Personne(nom="Awa", age=21)
 
 ### Héritage
 
-```
+```nck
 classe Etudiant herite Personne:
     ecole: texte = "Université de Ouagadougou"
 
@@ -346,7 +346,7 @@ La classe parente doit être déclarée avant ses enfants. Un enfant ne peut pas
 
 Dans une méthode d'une classe qui `herite`, `parent` donne accès aux méthodes de la classe parente pour l'objet courant.
 
-```
+```nck
 classe Etudiant herite Personne:
     fonction saluer() -> texte:
         retourner parent.saluer() + " (étudiant)"
@@ -358,7 +358,7 @@ fin
 
 Une méthode `statique` s'appelle sur la classe, sans objet (pas de `soi`). Une `constante` déclarée dans une classe se lit avec `Classe.NOM`.
 
-```
+```nck
 classe Temperature:
     degres: reel
     constante ZERO_ABSOLU = -273.15
@@ -376,7 +376,7 @@ ecrire(Temperature.ZERO_ABSOLU)
 
 Un champ ou une méthode dont le nom commence par `_` est privé : il n'est accessible que via `soi._nom` (ou `parent._nom`) dans les méthodes de la classe. Toute autre utilisation est une erreur de type.
 
-```
+```nck
 classe Compte:
     _solde: entier = 0
     fonction deposer(montant: entier): soi._solde = soi._solde + montant
@@ -392,7 +392,7 @@ ecrire(c._solde)      // erreur : '_solde' est privé
 
 Une méthode `abstraite` n'a pas de corps : elle décrit ce que les classes enfants doivent fournir. Tant qu'une classe a une méthode abstraite non implémentée, elle ne peut pas être instanciée.
 
-```
+```nck
 classe Forme:
     nom: texte
     abstraite fonction aire() -> reel
@@ -410,7 +410,7 @@ ecrire(Carre("petit", 2.0).decrire())   // petit : 4.0
 
 ### Tester la classe d'un objet : `est_un`
 
-```
+```nck
 ecrire(est_un(c, Forme))     // vrai (Carre hérite de Forme)
 ecrire(type_de(c))           // "Carre"
 ```
@@ -431,7 +431,7 @@ Si une classe définit certaines méthodes, les opérateurs les utilisent automa
 
 Sans `egal`, `==` compare l'identité (le même objet). `trier`, `contient`, `maximum`… fonctionnent sur des objets qui définissent `inferieur` / `egal`.
 
-```
+```nck
 classe Vecteur:
     x: reel
     y: reel
@@ -447,7 +447,7 @@ ecrire(Vecteur(1.0, 1.0) == Vecteur(1.0, 1.0))          // vrai
 
 Un décorateur est une fonction qui reçoit une fonction et en retourne une autre. `@deco` au-dessus d'une `fonction` (ou d'une méthode) remplace la fonction par `deco(fonction)` au moment de la définition. Plusieurs décorateurs s'appliquent de bas en haut.
 
-```
+```nck
 fonction journaliser(f: fonction<liste<quelconque>, quelconque>) -> fonction<liste<quelconque>, quelconque>:
     fonction enveloppe(...args) -> quelconque:
         ecrire("appel avec", args)
@@ -471,7 +471,7 @@ Pour le vérificateur, la fonction décorée garde sa signature déclarée (`add
 - `fonction f(...nombres: liste<entier>)` : les arguments restants sont rassemblés dans la liste `nombres` (`...args` sans type = `liste<quelconque>`). Il doit être le dernier paramètre.
 - `f(...liste)` : les éléments de la liste sont passés comme arguments séparés (impossible avec les fonctions natives et la création d'objets).
 
-```
+```nck
 fonction somme(...nombres: liste<entier>) -> entier:
     variable total = 0
     pour n dans nombres: total = total + n
@@ -484,7 +484,7 @@ ecrire(somme(0, ...l))          // 9
 
 ## 11. Gestion des erreurs
 
-```
+```nck
 essayer:
     variable n = entier(lire("nombre ? "))
     ecrire(10 / n)
@@ -499,7 +499,7 @@ fin
 - Les erreurs d'exécution du langage (division par zéro, index hors limites, conversion impossible, `verifier`…) sont attrapables de la même façon.
 - `Erreur` est une classe intégrée avec un champ `message: texte`. On crée ses propres erreurs en héritant :
 
-```
+```nck
 classe ErreurSolde herite Erreur:
     manque: entier
 fin
@@ -520,7 +520,7 @@ Une erreur jamais attrapée arrête le programme : `Erreur d'exécution : Erreur
 
 Un programme peut être découpé en plusieurs fichiers `.nck`. Les chemins sont relatifs au fichier qui importe.
 
-```
+```nck
 importer "outils/maths.nck"                  // accessible via le nom du fichier : maths.carre(2)
 importer "outils/maths.nck" comme m          // avec un alias : m.carre(2)
 depuis "outils/maths.nck" importer carre, PI // noms importés directement : carre(2)
@@ -537,7 +537,7 @@ depuis "outils/maths.nck" importer carre, PI // noms importés directement : car
 
 Une énumération est un ensemble fermé de valeurs nommées. Plus sûr qu'un texte ou un entier : le vérificateur connaît toutes les valeurs possibles.
 
-```
+```nck
 enumeration Couleur: ROUGE, VERT, BLEU fin
 
 enumeration Etat:          // aussi sur plusieurs lignes
@@ -571,7 +571,7 @@ La liste complète avec signatures et descriptions est dans [`NATIFS.md`](NATIFS
 
 Toute fonction native dont le premier paramètre est une liste, un texte, un dico ou un nombre peut s'écrire **comme une méthode** : `valeur.nom(autres arguments)`. Les deux formes sont équivalentes ; la notation méthode permet le chaînage et l'autocomplétion après le `.`.
 
-```
+```nck
 nombres.ajouter(5)                    ≡  ajouter(nombres, 5)
 nom.majuscule()                       ≡  majuscule(nom)
 l.filtrer(fonction(x): x > 1).appliquer(fonction(x): x * 10).somme()
@@ -646,7 +646,7 @@ d.obtenir("cle") ?? 0
 
 Trois familles, toutes avec ligne et colonne :
 
-```
+```text
 Erreur de syntaxe : 'fin' attendu pour fermer le bloc commencé ligne 2
 Erreur de type : 'age' est de type entier, mais reçoit un texte
   --> programme.nck:3:7

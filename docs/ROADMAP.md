@@ -1,7 +1,7 @@
 # Feuille de route NCK — ce qui reste à faire
 
 État au 15 octobre 2026 : **v0.12.0** (moteur Python complet, POO, lambdas, enums, modules, stdlib, VS Code, installateur sans Python).
-Historique de ce qui est fait : [CHANGELOG.md](../CHANGELOG.md).
+Historique de ce qui est fait : [CHANGELOG.md](changelog.md).
 
 Principe directeur inchangé : **rapide à prendre en main, simple, typé, en français**. Chaque version livre sa documentation,
 ses tests et une entrée dans le CHANGELOG. Les versions sont ordonnées par priorité ; l'ordre peut être ajusté.

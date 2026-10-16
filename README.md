@@ -31,6 +31,8 @@ ton nombre est petit ou égal à 20
 - **Lisible** : `si`, `sinon`, `tantque`, `pour ... dans`, `fonction`, `retourner`, `vrai`, `faux`, `et`, `ou`, `non`.
 - **Rapide** : l'interpréteur compile le programme en fermetures Python plutôt que de parcourir l'arbre à chaque instruction.
 
+📚 **Documentation complète : [nockiprogramtech.github.io/nck](https://nockiprogramtech.github.io/nck/)** — tutoriel, guide du langage, référence, outils, exemples.
+
 ## Installation
 
 **Sans rien d'autre à installer** (ni Python, ni dépendances) — voir [`docs/INSTALLATION.md`](docs/INSTALLATION.md) :
