@@ -153,7 +153,18 @@ def repl() -> int:
             return int(e.code or 0)
 
 
+def _sortie_utf8() -> None:
+    """Sortie en UTF-8 partout (Windows utilise cp1252 par défaut quand la sortie est redirigée)."""
+    for flux in (sys.stdout, sys.stderr):
+        try:
+            if flux and (flux.encoding or "").lower().replace("-", "") != "utf8":
+                flux.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _sortie_utf8()
     ap = argparse.ArgumentParser(
         prog="nck",
         description="NCK — langage de programmation simple, typé et en français.",

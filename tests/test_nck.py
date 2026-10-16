@@ -928,9 +928,9 @@ def test_e9_divers():
 
 
 def test_version_unique():
-    import nck, tomllib
-    data = tomllib.loads((RACINE / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "version" in data["project"].get("dynamic", []) and nck.__version__.count(".") == 2
+    import nck, re
+    pyproject = (RACINE / "pyproject.toml").read_text(encoding="utf-8")
+    assert re.search(r'dynamic\s*=\s*\[[^\]]*"version"', pyproject) and nck.__version__.count(".") == 2
 
 
 def test_cli_info_et_banniere():
