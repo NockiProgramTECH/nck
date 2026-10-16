@@ -152,7 +152,12 @@ class Interpreteur:
                 resultat[0] = e
 
         ancienne = threading.stack_size()
-        threading.stack_size(256 * 1024 * 1024)   # maximum accepté par Windows : < 512 Mo
+        for taille_mo in (255, 128, 64):           # Windows refuse 256 Mo et plus
+            try:
+                threading.stack_size(taille_mo * 1024 * 1024)
+                break
+            except (ValueError, RuntimeError):
+                continue
         try:
             fil = threading.Thread(target=cible, name="nck")
             fil.start()
