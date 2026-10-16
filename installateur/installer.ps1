@@ -1,4 +1,4 @@
-# Installateur NCK pour Windows (sans assistant graphique) — aucun Python requis.
+﻿# Installateur NCK pour Windows (sans assistant graphique) — aucun Python requis.
 #   irm https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.ps1 | iex
 # Variables : $env:NCK_VERSION (défaut : dernière), $env:NCK_PREFIX (défaut : %LOCALAPPDATA%\NCK)
 $ErrorActionPreference = "Stop"
@@ -12,7 +12,7 @@ if (-not $Version) {
 $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
 $Archive = "nck-$Version-windows-$Arch.zip"
 $Url = "https://github.com/$Depot/releases/download/v$Version/$Archive"
-Write-Host "→ Téléchargement de NCK $Version (windows-$Arch)…"
+Write-Host "-> Téléchargement de NCK $Version (windows-$Arch)..."
 $Tmp = Join-Path $env:TEMP $Archive
 Invoke-WebRequest $Url -OutFile $Tmp
 if (Test-Path $Prefix) { Remove-Item $Prefix -Recurse -Force }
@@ -30,7 +30,7 @@ $PathUtilisateur = [Environment]::GetEnvironmentVariable("Path", "User")
 if (-not (($PathUtilisateur -split ";") -contains $Prefix)) {
   [Environment]::SetEnvironmentVariable("Path", "$PathUtilisateur;$Prefix", "User")
   $env:Path = "$env:Path;$Prefix"
-  Write-Host "→ $Prefix ajouté au PATH (ouvrez un nouveau terminal)."
+  Write-Host "-> $Prefix ajouté au PATH (ouvrez un nouveau terminal)."
 }
 # Extension VS Code
 $VsCode = Join-Path $env:USERPROFILE ".vscode\extensions"
@@ -39,9 +39,9 @@ if ((Test-Path (Join-Path $env:USERPROFILE ".vscode")) -and (Test-Path (Join-Pat
   if (Test-Path $Cible) { Remove-Item $Cible -Recurse -Force }
   New-Item -ItemType Directory -Path $VsCode -Force | Out-Null
   Copy-Item (Join-Path $Prefix "editeurs\vscode") $Cible -Recurse
-  Write-Host "→ Extension VS Code installée (redémarrez VS Code)."
+  Write-Host "-> Extension VS Code installée (redémarrez VS Code)."
 }
 Write-Host ""
 & (Join-Path $Prefix "nck.exe") info
 Write-Host ""
-Write-Host "✓ NCK $Version installé. Essayez :  nck `"$Prefix\exemples\bonjour.nck`""
+Write-Host "OK - NCK $Version installé. Essayez :  nck `"$Prefix\exemples\bonjour.nck`""

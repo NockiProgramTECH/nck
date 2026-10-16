@@ -1,4 +1,4 @@
-# Construit NCK-Setup-<version>.exe sous Windows : trouve (ou installe) Inno Setup, puis compile nck.iss.
+﻿# Construit NCK-Setup-<version>.exe sous Windows : trouve (ou installe) Inno Setup, puis compile nck.iss.
 #   powershell -ExecutionPolicy Bypass -File installateur\windows\construire_setup.ps1
 # Options : -SansExe (ne pas relancer PyInstaller si dist\nck\nck.exe existe déjà)
 param([switch]$SansExe)
@@ -8,7 +8,7 @@ Set-Location $Racine
 
 # 1. L'exécutable nck.exe
 if (-not $SansExe -or -not (Test-Path "dist\nck\nck.exe")) {
-  Write-Host "→ Construction de dist\nck\nck.exe (PyInstaller)…"
+  Write-Host "-> Construction de dist\nck\nck.exe (PyInstaller)..."
   python -m PyInstaller --version 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) { python -m pip install pyinstaller }
   python installateur\construire.py
@@ -28,7 +28,7 @@ function Trouver-ISCC {
 }
 $iscc = Trouver-ISCC
 if (-not $iscc) {
-  Write-Host "Inno Setup n'est pas installé. Installation avec winget…"
+  Write-Host "Inno Setup n'est pas installé. Installation avec winget..."
   $winget = Get-Command winget -ErrorAction SilentlyContinue
   if ($winget) {
     winget install --id JRSoftware.InnoSetup -e --silent --accept-package-agreements --accept-source-agreements
@@ -38,11 +38,11 @@ if (-not $iscc) {
     throw "Installez Inno Setup 6 depuis https://jrsoftware.org/isdl.php puis relancez ce script."
   }
 }
-Write-Host "→ Inno Setup : $iscc"
+Write-Host "-> Inno Setup : $iscc"
 
 # 3. Compiler
 $version = python -c "import nck; print(nck.__version__)"
 & $iscc "/DVersion=$version" "installateur\windows\nck.iss"
 if ($LASTEXITCODE -ne 0) { throw "ISCC a échoué (code $LASTEXITCODE)." }
 Write-Host ""
-Write-Host "✓ dist\NCK-Setup-$version.exe"
+Write-Host "OK - dist\NCK-Setup-$version.exe"
