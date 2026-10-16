@@ -25,6 +25,13 @@ def main() -> int:
     if r.returncode != 0:
         return r.returncode
     dossier = os.path.join("dist", "nck")
+    # Fichiers visibles à côté de l'exécutable (utilisés par nck.iss, installer.sh et l'utilisateur).
+    for source, cible in (("exemples", "exemples"), ("docs", "docs"),
+                          (os.path.join("editeurs", "vscode"), os.path.join("editeurs", "vscode"))):
+        shutil.copytree(source, os.path.join(dossier, cible), dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    for f in ("LICENSE", "README.md", "CHANGELOG.md"):
+        shutil.copy(f, dossier)
     systeme = {"Windows": "windows", "Darwin": "macos", "Linux": "linux"}.get(platform.system(), platform.system().lower())
     arch = {"AMD64": "x64", "x86_64": "x64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine(), platform.machine())
     base = f"nck-{__version__}-{systeme}-{arch}"

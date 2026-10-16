@@ -10,12 +10,9 @@ a = Analysis(
     [os.path.join(racine, "installateur", "lanceur.py")],
     pathex=[racine],
     binaries=[],
-    datas=[
-        (os.path.join(racine, "exemples"), "exemples"),
-        (os.path.join(racine, "docs"), "docs"),
-        (os.path.join(racine, "editeurs", "vscode"), os.path.join("editeurs", "vscode")),
-        (os.path.join(racine, "LICENSE"), "."),
-    ],
+    # Les exemples, docs et l'extension VS Code sont copiés à la racine de dist/nck/ par construire.py
+    # (PyInstaller 6 placerait les « datas » dans dist/nck/_internal/, invisible pour l'utilisateur).
+    datas=[],
     hiddenimports=["nck", "nck.cli", "nck.serveur", "nck.natifs", "nck.documentation", "nck.analyse",
                    "tkinter", "tkinter.ttk", "tkinter.messagebox", "tkinter.filedialog", "tkinter.simpledialog"],
     hookspath=[],
