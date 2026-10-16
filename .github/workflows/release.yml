@@ -23,7 +23,7 @@ jobs:
           - { os: ubuntu-22.04,  nom: linux-x64 }
           - { os: ubuntu-22.04-arm, nom: linux-arm64 }
           - { os: windows-latest, nom: windows-x64 }
-          - { os: macos-13,      nom: macos-x64 }
+          - { os: macos-15-intel, nom: macos-x64 }
           - { os: macos-latest,  nom: macos-arm64 }
     steps:
       - uses: actions/checkout@v4
