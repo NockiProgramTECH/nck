@@ -9,6 +9,7 @@
 - CLI : bannière et REPL quand `nck` est lancé sans argument, nouvelle commande `nck info` (version, chemin, autonome ou non).
 - Extension VS Code 0.5.0 : utilise l'exécutable `nck` du PATH (réglage `nck.commande`), `python -m nck` en repli.
 - Documentation : `docs/INSTALLATION.md`.
+- Correctif : sous Windows avec Python < 3.12, exécution dans un fil à grande pile (la pile C du fil principal débordait avant la limite de 2000 appels NCK).
 
 ## 0.11.1 — corrections de l'audit
 - **E1** Les `importer` sont traités avant tout : une classe importée peut servir de type (`p: Personne`) et de parent (`herite Personne`).
