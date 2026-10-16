@@ -1,6 +1,6 @@
 """Construit l'exécutable autonome avec PyInstaller, puis l'archive de distribution.
 
-    python installateur/construire.py            → dist/nck/  +  dist/nck-<version>-<os>-<arch>.zip|.tar.gz
+    python installateur/construire.py            -> dist/nck/  +  dist/nck-<version>-<os>-<arch>.zip|.tar.gz
 
 Prérequis : pip install pyinstaller
 """
@@ -47,7 +47,7 @@ def main() -> int:
         with tarfile.open(archive, "w:gz") as t:
             t.add(dossier, arcname="nck")
     taille = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(dossier) for f in fs) / 1e6
-    print(f"\n✓ {dossier}/ ({taille:.1f} Mo)  →  {archive} ({os.path.getsize(archive) / 1e6:.1f} Mo)")
+    print(f"\nOK : {dossier}/ ({taille:.1f} Mo)  ->  {archive} ({os.path.getsize(archive) / 1e6:.1f} Mo)")
     return 0
 
 
