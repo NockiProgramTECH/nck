@@ -21,7 +21,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: pip install -e .[dev] pytest-github-actions-annotate-failures
-      - run: python -m pytest -q
+      - name: Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -x --tb=short 2>&1 | tee sortie_tests.txt || {
+            tail -n 12 sortie_tests.txt | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
       - name: Vérifier les exemples
         shell: bash
         run: |
