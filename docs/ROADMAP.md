@@ -1,6 +1,7 @@
 # Feuille de route NCK — ce qui reste à faire
 
-État au 15 octobre 2026 : **v0.12.0** (moteur Python complet, POO, lambdas, enums, modules, stdlib, VS Code, installateur sans Python).
+État au 16 octobre 2026 : **v0.13.0 en développement, non publiée** (gestionnaire de paquets implémenté ; registre public à déployer).
+La version de référence précédente est la v0.12.0.
 Historique de ce qui est fait : [CHANGELOG.md](changelog.md).
 
 Principe directeur inchangé : **rapide à prendre en main, simple, typé, en français**. Chaque version livre sa documentation,
@@ -27,7 +28,11 @@ ses tests et une entrée dans le CHANGELOG. Les versions sont ordonnées par pri
 
 ## v0.13 — Gestionnaire de paquets
 
-**Pourquoi** : aujourd'hui `importer` ne connaît que les fichiers locaux ; impossible de partager une bibliothèque.
+**Implémenté** : manifeste, commandes, résolution des versions, archives vérifiées, verrouillage, imports de paquets, outil de préparation du registre et scénario de validation des binaires en CI.
+Voir [le guide des paquets](PAQUETS.md) et l’exemple `exemples/paquets/maths-plus`.
+**Reste à faire avant publication** : créer et alimenter le registre public `nck-paquets`,
+puis valider les exécutables autonomes de la v0.13 sur les plateformes cibles.
+Les index locaux et HTTPS personnalisés sont utilisables sans ce déploiement.
 
 - `paquet.json` à la racine d'un projet : `nom`, `version`, `description`, `point_entree`, `dependances { "nom": "^1.2" }`.
 - Commandes : `nck installer nom[@version]`, `nck desinstaller nom`, `nck paquets` (liste), `nck init` (crée `paquet.json`),

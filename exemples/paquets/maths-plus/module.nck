@@ -1,0 +1,8 @@
+// Bibliothèque d'exemple pour le gestionnaire de paquets NCK.
+fonction carre(n: entier) -> entier:
+    retourner n * n
+fin
+
+fonction cube(n: entier) -> entier:
+    retourner n * n * n
+fin

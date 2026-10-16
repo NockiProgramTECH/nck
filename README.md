@@ -56,6 +56,19 @@ nck verifier programme.nck   # vérifie la syntaxe et les types, sans exécuter
 nck                          # mode interactif
 ```
 
+## Paquets (v0.13)
+
+```bash
+nck init --nom mon-projet
+nck installer maths-plus --index /chemin/vers/index.json
+nck paquets
+```
+
+Les bibliothèques s'importent avec `importer "maths-plus" comme maths`. Le gestionnaire
+résout les dépendances, vérifie le SHA-256 des archives et écrit `paquet.verrou.json`.
+Le registre public reste à mettre en service : utilisez pour l'instant un index
+personnalisé. Voir le [guide des paquets](docs/PAQUETS.md), avec un exemple local complet.
+
 ## Aperçu du langage
 
 ```

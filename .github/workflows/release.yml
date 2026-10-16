@@ -36,12 +36,8 @@ jobs:
         run: pip install pytest && pytest -q
       - name: Construire l'exécutable
         run: python installateur/construire.py
-      - name: Vérifier l'exécutable
-        shell: bash
-        run: |
-          ./dist/nck/nck info
-          ./dist/nck/nck verifier exemples/bonjour.nck
-          ./dist/nck/nck exemples/bonjour.nck
+      - name: Vérifier l'exécutable et les paquets hors du dépôt
+        run: python installateur/verifier_autonome.py dist/nck/nck${{ runner.os == 'Windows' && '.exe' || '' }}
       - name: Installateur Windows (Inno Setup)
         if: runner.os == 'Windows'
         shell: pwsh

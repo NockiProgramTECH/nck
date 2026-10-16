@@ -8,7 +8,7 @@ from .arbre import (
     Pour, Programme, Retourner, Selon, Si, TantQue, TexteFormate, TypeAnnot, Unaire,
 )
 from .erreurs import ErreurType
-from .modules import Chargeur, Module
+from .modules import Chargeur, Module, nom_module
 from .natifs import NATIFS
 from .documentation import METHODES_PAR_TYPE
 from .types_nck import (
@@ -763,7 +763,7 @@ class Verificateur:
                     raise self.erreur(f"'{nom}' n'a pas de valeur dans le module \"{imp.chemin}\"", imp)
                 self.declarer(nom, sym.type, imp, constante=True, genre=sym.genre, description=sym.description)
         else:
-            alias = imp.alias or m.nom
+            alias = imp.alias or nom_module(imp.chemin)
             imp.alias = alias
             self.declarer(alias, TypeModule(m.nom, (), m.chemin), imp, constante=True, genre="module",
                           description=f"module {alias} (\"{imp.chemin}\")")

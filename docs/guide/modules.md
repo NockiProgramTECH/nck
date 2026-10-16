@@ -72,5 +72,6 @@ supprimer_fichier("awa.json")
 ```
 
 !!! note "Paquets"
-    La gestion de bibliothèques partagées (`nck installer nom`, `importer "nom"`) est prévue en v0.13 :
-    voir la [feuille de route](../ROADMAP.md).
+    Les bibliothèques partagées s’installent avec `nck installer nom` et s’importent
+    avec `importer "nom"`. Consultez le [guide des paquets](../PAQUETS.md) pour configurer
+    un index, déclarer des dépendances et utiliser le fichier de verrouillage.

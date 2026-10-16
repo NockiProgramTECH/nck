@@ -1,0 +1,7 @@
+{
+  "nom": "maths-plus",
+  "version": "1.0.0",
+  "description": "Exemple de bibliothèque NCK portable",
+  "point_entree": "module.nck",
+  "dependances": {}
+}

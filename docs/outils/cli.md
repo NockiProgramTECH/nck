@@ -7,6 +7,10 @@ nck executer fichier.nck     idem, explicite
 nck verifier fichier.nck     vérifie syntaxe et types SANS exécuter
 nck repl                     mode interactif
 nck info                     version, emplacement, mode autonome ou non
+nck init [--nom nom]          crée un projet (paquet.json)
+nck installer [nom[@version]] installe un paquet ou les dépendances du projet
+nck desinstaller nom         retire une dépendance directe
+nck paquets                  liste les paquets installés
 nck serveur                  serveur d'analyse pour les éditeurs (JSON)
 nck --version                numéro de version
 nck --help                   aide
@@ -34,12 +38,19 @@ Code de sortie 0 si tout va bien, 1 sinon — pratique dans un script ou une CI 
 for f in src/*.nck; do nck verifier "$f" || exit 1; done
 ```
 
+## Paquets
+
+Les commandes `installer` et `desinstaller` acceptent `--index` (URL HTTPS ou chemin
+local). Le registre public reste à mettre en service ; utilisez un index personnalisé.
+Voir le [guide des paquets](../PAQUETS.md) pour les formats de manifeste et d'index,
+les contraintes de versions, les imports et le verrouillage.
+
 ## Codes de sortie
 
 | Code | Signification |
 |---|---|
 | 0 | succès |
-| 1 | erreur NCK (syntaxe, type, exécution non attrapée) ou `quitter(1)` |
+| 1 | erreur de paquet ou erreur NCK (syntaxe, type, exécution non attrapée) ou `quitter(1)` |
 | 2 | erreur interne (bogue de NCK) — `NCK_DEBUG=1 nck f.nck` affiche la trace |
 | 130 | ++ctrl+c++ |
 
@@ -47,6 +58,7 @@ for f in src/*.nck; do nck verifier "$f" || exit 1; done
 
 | Variable | Effet |
 |---|---|
+| `NCK_INDEX` | URL HTTPS ou chemin local de l’index de paquets (remplacé par `--index`) |
 | `NCK_DEBUG=1` | affiche la trace Python complète en cas d'erreur interne |
 
 ## Entrée / sortie

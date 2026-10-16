@@ -1,5 +1,17 @@
 # Journal des modifications
 
+## 0.13.0 — gestionnaire de paquets (non publiée)
+- Projets `paquet.json` et commandes `nck init`, `nck installer [nom[@version]]`, `nck desinstaller nom`, `nck paquets`.
+- Index JSON local ou HTTPS, configurable par `--index` / `NCK_INDEX` ; archives ZIP 100 % NCK avec contrôle SHA-256, validation des chemins et limites de taille. Aucun script d’installation exécuté.
+- Résolution des dépendances transitives avec retour sur les versions antérieures en cas de conflit ; contraintes exactes, `*`, `^` et `~`.
+- Verrou `paquet.verrou.json` (versions, sources, empreintes), installation préparée avant remplacement et restauration en cas d’erreur d’écriture.
+- Imports par nom de paquet depuis les `nck_modules` du fichier et de ses parents, puis `~/.nck/paquets` ; imports locaux inchangés, cache et vérification des types conservés.
+- Exécutable autonome : réintégration de `http` et `email`, nécessaires à `urllib`, dans la configuration PyInstaller.
+- Préparation de bibliothèques avec `outils/preparer_paquet.py` : ZIP reproductibles, validation de la syntaxe et du contenu, fusion d'index, empreintes et protection des versions existantes ; `--url-base` pour préparer une publication HTTPS, sans téléversement.
+- Construction : diagnostic préalable de PyInstaller/libpython sans supprimer les anciens artefacts en cas de prérequis manquant ; validation fonctionnelle des paquets dans chaque binaire de la matrice de release, hors du dépôt et sans Python dans le PATH.
+- Guide `docs/PAQUETS.md`, bibliothèque d’exemple `exemples/paquets/maths-plus` et tests de régression.
+- Reste à déployer : le registre public `NockiProgramTECH/nck-paquets`. Les index personnalisés sont utilisables dès maintenant.
+
 ## 0.12.0 — installation sans Python
 - Site de documentation complet (MkDocs Material, `mkdocs.yml`, `docs/`) publié sur GitHub Pages par `docs.yml` : tutoriel, guide du langage en 15 chapitres, référence, outils, exemples, FAQ ; coloration NCK (`outils/pygments_nck`) ; tous les extraits sont vérifiés et exécutés par `outils/verifier_doc.py`.
 - Exécutable autonome `nck` (PyInstaller, `installateur/construire.py` + `nck.spec`) : Python embarqué, exemples, docs et extension VS Code inclus.
