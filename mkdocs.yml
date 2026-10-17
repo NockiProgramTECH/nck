@@ -88,6 +88,7 @@ nav:
       - Messages d'erreur: guide/messages-erreur.md
   - Outils:
       - Ligne de commande nck: outils/cli.md
+      - Gestionnaire de paquets: PAQUETS.md
       - Mode interactif (REPL): outils/repl.md
       - Visual Studio Code: EDITEUR.md
       - Construire et publier: outils/publier.md

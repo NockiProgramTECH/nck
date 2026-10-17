@@ -26,6 +26,7 @@ python outils/verifier_doc.py  # vérifie et exécute tous les exemples de la do
 | `nck/natifs.py`, `nck/documentation.py` | fonctions natives et leur documentation (survol VS Code, `NATIFS.md`) |
 | `nck/analyse.py`, `nck/serveur.py` | complétion, survol, définition — serveur pour l'extension |
 | `nck/cli.py` | commande `nck` |
+| `nck/paquets.py`, `outils/preparer_paquet.py` | gestionnaire et préparation de bibliothèques |
 | `editeurs/vscode/` | extension VS Code |
 | `installateur/` | PyInstaller, Inno Setup, scripts d'installation |
 | `docs/`, `mkdocs.yml` | ce site |
@@ -37,6 +38,26 @@ python outils/verifier_doc.py  # vérifie et exécute tous les exemples de la do
 pip install pyinstaller
 python installateur/construire.py        # → dist/nck/ + archive .tar.gz ou .zip
 ```
+
+La construction vérifie d'abord PyInstaller et la bibliothèque partagée du Python
+utilisé. Si cette bibliothèque manque, elle s'arrête **sans supprimer les anciens
+artefacts**. Sur Debian/Ubuntu, installez le paquet `libpython` correspondant à votre
+version (par exemple `libpython3.11` pour Python 3.11) ou utilisez un Python compilé
+avec bibliothèque partagée. Les runners GitHub utilisent `actions/setup-python`.
+
+Après construction, validez la distribution hors du dépôt et sans réseau :
+
+```bash
+python installateur/verifier_autonome.py dist/nck/nck
+```
+
+Sous Windows, utilisez `dist/nck/nck.exe`. Le scénario lance le binaire avec un
+`PATH` réduit à son dossier et sans `PYTHONPATH`/`PYTHONHOME`. Il vérifie le mode
+autonome, la CLI, l'installation de dépendances transitives depuis un index local,
+la vérification des types, l'exécution, le verrou inchangé lors d'une réinstallation
+sans index, le refus d'un SHA-256 incorrect sans perte de l'installation et la
+désinstallation. Les dossiers de test ont des espaces et des caractères accentués.
+Le Python de construction ne sert qu'à préparer les fixtures et lancer les commandes.
 
 Windows, pour l'assistant `NCK-Setup.exe` (installe Inno Setup s'il manque) :
 
@@ -54,8 +75,29 @@ git tag v0.13.0
 git push origin v0.13.0
 ```
 
-GitHub Actions (`.github/workflows/release.yml`) construit Linux x64/arm64, Windows x64 (+ Setup), macOS x64/arm64,
-teste chaque exécutable et publie la Release.
+GitHub Actions (`.github/workflows/release.yml`) construit Linux x64/arm64 et Windows x64 (+ Setup),
+teste chaque exécutable avec ce scénario et publie la Release uniquement si toutes
+les constructions et validations réussissent. Un lancement manuel du workflow
+construit les artefacts sans publier de release (absence de tag).
+
+### Plateformes prises en charge
+
+Les releases et les tests automatiques ciblent actuellement **Linux et Windows**.
+Les exécutables macOS sont reportés et ne bloquent plus la publication.
+Il n'est pas nécessaire de posséder un Mac pour utiliser un runner GitHub macOS,
+mais leur réactivation attendra une validation de cette plateforme. La construction
+manuelle depuis les sources reste possible, sans garantie de support macOS.
+
+## Préparer une bibliothèque NCK
+
+```bash
+python outils/preparer_paquet.py exemples/paquets/maths-plus --sortie registre-local
+```
+
+Cet outil ne publie rien : il génère une archive reproductible, calcule son SHA-256
+et met à jour un index local sans écraser une version existante. `--url-base` permet
+de préparer un index HTTPS pour une publication manuelle. Consultez le
+[guide des paquets](../PAQUETS.md) pour le format et la procédure de déploiement.
 
 ## Construire ce site de documentation
 
@@ -65,8 +107,8 @@ mkdocs serve          # aperçu local sur http://127.0.0.1:8000
 mkdocs build          # → site/
 ```
 
-Le site est publié automatiquement sur GitHub Pages par `.github/workflows/docs.yml` à chaque modification de `docs/`
-ou `mkdocs.yml`. Tous les blocs `nck` de la documentation sont vérifiés et exécutés par `outils/verifier_doc.py` (en CI aussi).
+Le workflow `.github/workflows/docs.yml` construit et vérifie la documentation sur `main` et les branches `arena/**`.
+Seule la branche `main` peut publier le site sur GitHub Pages ; les branches de travail ne déclenchent aucun déploiement. Tous les blocs `nck` de la documentation sont vérifiés et exécutés par `outils/verifier_doc.py` (en CI aussi).
 
 ### Nom de domaine personnalisé
 

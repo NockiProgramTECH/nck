@@ -41,9 +41,13 @@ ton nombre est petit ou égal à 20
 |---|---|
 | Windows | Téléchargez **`NCK-Setup-<version>.exe`** dans les [Releases](https://github.com/NockiProgramTECH/nck/releases) et suivez l'assistant (PATH, fichiers `.nck`, extension VS Code) |
 | Windows (terminal) | `irm https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.ps1 \| iex` |
-| Linux / macOS | `curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh \| sh` |
+| Linux | `curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh \| sh` |
 
 Puis, dans un nouveau terminal : `nck info`.
+
+**Releases officielles : Linux x64/arm64 et Windows x64.** Le support des exécutables
+macOS est reporté ; l'installation depuis les sources avec Python reste possible,
+mais n'est pas validée sur macOS par la CI actuelle.
 
 Pour les développeurs (Python 3.10+) : `git clone … && cd nck && pip install -e .`
 
@@ -55,6 +59,19 @@ nck programme.nck a b        # ... avec des arguments (lus par arguments())
 nck verifier programme.nck   # vérifie la syntaxe et les types, sans exécuter
 nck                          # mode interactif
 ```
+
+## Paquets (v0.13)
+
+```bash
+nck init --nom mon-projet
+nck installer maths-plus --index /chemin/vers/index.json
+nck paquets
+```
+
+Les bibliothèques s'importent avec `importer "maths-plus" comme maths`. Le gestionnaire
+résout les dépendances, vérifie le SHA-256 des archives et écrit `paquet.verrou.json`.
+Le registre public reste à mettre en service : utilisez pour l'instant un index
+personnalisé. Voir le [guide des paquets](docs/PAQUETS.md), avec un exemple local complet.
 
 ## Aperçu du langage
 

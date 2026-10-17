@@ -180,15 +180,42 @@ def main(argv: list[str] | None = None) -> int:
     sous.add_parser("serveur", help="serveur d'analyse pour les éditeurs (autocomplétion, survol, erreurs)")
     sous.add_parser("info", help="affiche la version et l'emplacement de NCK")
 
+    p_init = sous.add_parser("init", help="crée un projet NCK (paquet.json)")
+    p_init.add_argument("--nom", help="nom du projet (exemple : maths-plus)")
+    p_install = sous.add_parser("installer", help="installe un paquet ou les dépendances du projet")
+    p_install.add_argument("paquet", nargs="?", help="nom ou nom@version (exemple : maths-plus@^1.2)")
+    p_install.add_argument("--index", help="URL HTTPS ou chemin d'un index JSON local")
+    p_remove = sous.add_parser("desinstaller", help="retire une dépendance directe et les paquets inutilisés")
+    p_remove.add_argument("paquet")
+    p_remove.add_argument("--index", help="URL HTTPS ou chemin d'un index JSON local")
+    sous.add_parser("paquets", help="liste les dépendances installées")
+
     args = argv if argv is not None else sys.argv[1:]
     if not args:
         print(banniere())
         return repl()
     # Raccourci : `nck fichier.nck`
-    if args and args[0] not in ("executer", "verifier", "repl", "serveur", "info", "-h", "--help", "--version"):
+    commandes = ("executer", "verifier", "repl", "serveur", "info", "init", "installer",
+                 "desinstaller", "paquets", "-h", "--help", "--version")
+    if args and args[0] not in commandes:
         args = ["executer", *args]
     ns = ap.parse_args(args)
 
+    if ns.commande in ("init", "installer", "desinstaller", "paquets"):
+        from .paquets import ErreurPaquet, initialiser, installer, lister
+        try:
+            if ns.commande == "init":
+                print(f"Projet créé : {initialiser(ns.nom)}")
+            elif ns.commande == "paquets":
+                print("\n".join(lister()) or "Aucun paquet installé.")
+            else:
+                choix = installer(ns.paquet if ns.commande == "installer" else None, ns.index,
+                                  ns.paquet if ns.commande == "desinstaller" else None)
+                print("Dépendances installées : " + (", ".join(f"{n}@{v}" for n, v in choix.items()) or "aucune"))
+            return 0
+        except (ErreurPaquet, OSError) as exc:
+            print(f"Erreur : {exc}", file=sys.stderr)
+            return 1
     if ns.commande == "executer":
         from . import natifs
         natifs.ARGUMENTS[:] = ns.arguments

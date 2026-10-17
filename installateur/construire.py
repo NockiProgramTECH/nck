@@ -17,7 +17,36 @@ sys.path.insert(0, RACINE)
 from nck import __version__  # noqa: E402
 
 
+def bibliotheque_python():
+    from PyInstaller.depend.bindepend import get_python_library_path
+    from PyInstaller.exceptions import PythonLibraryNotFoundError
+    try:
+        return get_python_library_path()
+    except PythonLibraryNotFoundError:
+        return None
+
+
+def verifier_prerequis() -> bool:
+    try:
+        bibliotheque = bibliotheque_python()
+    except ImportError:
+        print("Erreur : PyInstaller manque. Installez-le avec : python -m pip install pyinstaller", file=sys.stderr)
+        return False
+    if not bibliotheque or not os.path.isfile(bibliotheque):
+        print(
+            f"Erreur : bibliothèque partagée de Python {sys.version_info.major}.{sys.version_info.minor} introuvable.\n"
+            f"Interpréteur : {sys.executable}\n"
+            "PyInstaller en a besoin pour construire l'exécutable autonome.\n"
+            "Debian/Ubuntu : installez le paquet libpython correspondant à cette version de Python.\n"
+            "Sinon, utilisez une distribution Python avec bibliothèque partagée (python.org ou actions/setup-python).\n"
+            "Aucun dossier build/dist n'a été supprimé.", file=sys.stderr)
+        return False
+    return True
+
+
 def main() -> int:
+    if not verifier_prerequis():
+        return 1
     os.chdir(RACINE)
     for d in ("build", os.path.join("dist", "nck")):
         shutil.rmtree(d, ignore_errors=True)

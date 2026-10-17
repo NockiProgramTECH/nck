@@ -1,14 +1,13 @@
 # Installer NCK
 
 NCK s'installe **sans Python** : l'exécutable `nck` embarque tout ce qu'il lui faut.
-Toutes les versions sont publiées dans les [Releases GitHub](https://github.com/NockiProgramTECH/nck/releases).
+Les releases officielles ciblent **Linux x64/arm64 et Windows x64**. Les fichiers sont disponibles dans les [Releases GitHub](https://github.com/NockiProgramTECH/nck/releases).
 
 | Fichier de la release | Pour |
 |---|---|
 | `NCK-Setup-<version>.exe` | Windows — **assistant d'installation** (recommandé) |
 | `nck-<version>-windows-x64.zip` | Windows — archive portable |
 | `nck-<version>-linux-x64.tar.gz`, `…-linux-arm64.tar.gz` | Linux |
-| `nck-<version>-macos-x64.tar.gz`, `…-macos-arm64.tar.gz` | macOS (Intel / Apple Silicon) |
 
 ---
 
@@ -48,7 +47,7 @@ Décompressez `nck-<version>-windows-x64.zip` où vous voulez : `nck\nck.exe` fo
 
 ---
 
-## Linux et macOS
+## Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/NockiProgramTECH/nck/main/installateur/installer.sh | sh
@@ -64,10 +63,23 @@ Variables facultatives : `NCK_VERSION=0.12.0`, `NCK_PREFIX=/opt/nck`, `NCK_BIN=/
 
 Ouvrez ensuite un nouveau terminal : `nck info`.
 
-> **macOS** : si le système affiche « nck ne peut pas être ouvert car il provient d'un développeur non identifié »,
-> exécutez une fois `xattr -dr com.apple.quarantine ~/.nck`.
-
 À la main : décompressez l'archive `.tar.gz` et ajoutez le dossier `nck/` à votre PATH.
+
+---
+
+## macOS — support autonome reporté
+
+Les nouvelles releases ne produisent pas d'exécutable macOS. L'installateur
+`installer.sh` s'arrête sur macOS avec un message explicite, sans télécharger ni
+modifier l'installation existante. Les anciennes archives éventuellement publiées
+restent des fichiers historiques, pas une garantie de support de la v0.13.
+
+Pour expérimenter, utilisez [l'installation depuis le dépôt](#pour-les-developpeurs-installer-depuis-le-depot)
+avec Python 3.10 ou plus récent. Ce parcours n'est pas validé sur macOS par la CI
+actuelle. Les scripts de construction restent disponibles pour une reprise future.
+
+GitHub Actions peut construire sur des runners macOS sans Mac personnel ; la
+réactivation attendra une validation adaptée de l'installation et de l'exécution.
 
 ---
 
@@ -98,7 +110,7 @@ Les exemples et la documentation sont fournis avec l'installation (`exemples/`, 
 |---|---|---|
 | Windows (Setup) | lancez le nouveau `NCK-Setup` | *Paramètres → Applications → NCK* |
 | Windows (script) | relancez `installer.ps1` | supprimez `%LOCALAPPDATA%\NCK` et retirez-le du PATH |
-| Linux / macOS | relancez `installer.sh` | `rm -rf ~/.nck ~/.local/bin/nck ~/.vscode/extensions/nck-lang` |
+| Linux | relancez `installer.sh` | `rm -rf ~/.nck ~/.local/bin/nck ~/.vscode/extensions/nck-lang` |
 
 ---
 
@@ -141,7 +153,7 @@ Fichiers concernés :
 | `installateur/windows/nck.iss` | assistant Windows (PATH, associations, menu contextuel, extension VS Code) |
 | `installateur/windows/construire_setup.ps1` | construit l'exécutable puis `NCK-Setup.exe` (installe Inno Setup au besoin) |
 | `installateur/installer.sh`, `installer.ps1` | installateurs en ligne de commande |
-| `.github/workflows/release.yml` | à chaque tag `vX.Y.Z` : construit pour les 5 plateformes et publie la Release |
+| `.github/workflows/release.yml` | à chaque tag `vX.Y.Z` : construit Linux x64/arm64 et Windows x64 (+ Setup), puis publie la Release |
 
 ### Publier une version
 

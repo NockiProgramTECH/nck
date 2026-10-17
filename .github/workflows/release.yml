@@ -19,12 +19,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # macOS reporté : releases officielles Linux et Windows uniquement.
         include:
           - { os: ubuntu-22.04,  nom: linux-x64 }
           - { os: ubuntu-22.04-arm, nom: linux-arm64 }
           - { os: windows-latest, nom: windows-x64 }
-          - { os: macos-15-intel, nom: macos-x64 }
-          - { os: macos-latest,  nom: macos-arm64 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,12 +35,8 @@ jobs:
         run: pip install pytest && pytest -q
       - name: Construire l'exécutable
         run: python installateur/construire.py
-      - name: Vérifier l'exécutable
-        shell: bash
-        run: |
-          ./dist/nck/nck info
-          ./dist/nck/nck verifier exemples/bonjour.nck
-          ./dist/nck/nck exemples/bonjour.nck
+      - name: Vérifier l'exécutable et les paquets hors du dépôt
+        run: python installateur/verifier_autonome.py dist/nck/nck${{ runner.os == 'Windows' && '.exe' || '' }}
       - name: Installateur Windows (Inno Setup)
         if: runner.os == 'Windows'
         shell: pwsh
