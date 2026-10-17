@@ -32,6 +32,7 @@ ecrire(carre(3.0), c.aire())
 - `importer` se place au niveau principal du fichier (de préférence en tête) ; les imports circulaires sont refusés.
 - Les variables d'un module ne se modifient pas de l'extérieur (`m.compteur = 0` est une erreur) : passez par une fonction du module.
 - `depuis … importer x` copie la **valeur** de `x` au moment de l'import.
+- `gui` est un module natif réservé, disponible sans paquet : `importer "gui" comme gui` (voir la [référence graphique](../GUI.md)).
 - Les noms de classes doivent être uniques dans tout le programme.
 
 ## Organiser un projet

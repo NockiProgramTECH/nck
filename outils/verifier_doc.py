@@ -40,8 +40,10 @@ def main(dossier: str = "docs") -> int:
                                    text=True, encoding="utf-8", cwd=tmp)
                 attendu_echec = "// erreur attendue" in code
                 ok = (r.returncode != 0) if attendu_echec else (r.returncode == 0)
-                # Exécution aussi, quand le bloc n'a besoin ni du clavier ni d'arguments.
-                if ok and not attendu_echec and "lire(" not in code and "arguments()" not in code:
+                # Exécution aussi, quand le bloc ne nécessite ni saisie interactive ni interface graphique.
+                sans_execution = "// nécessite un environnement graphique" in code
+                if (ok and not attendu_echec and not sans_execution
+                        and "lire(" not in code and "arguments()" not in code):
                     try:
                         r = subprocess.run([sys.executable, "-m", "nck", fichier], capture_output=True, text=True,
                                            encoding="utf-8", cwd=tmp, timeout=20)

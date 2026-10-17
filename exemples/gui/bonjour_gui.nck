@@ -1,0 +1,12 @@
+// Bonjour NCK — démonstration du module natif gui (nécessite une session graphique).
+importer "gui" comme gui
+
+variable app = gui.fenetre("Bonjour NCK", 420, 220)
+variable nom = gui.champ(app, "Awa")
+variable reponse = gui.etiquette(app, "Bonjour !")
+
+gui.bouton(app, "Saluer", fonction():
+    gui.definir_texte(reponse, "Bonjour " + texte(gui.valeur(nom)) + " !")
+fin)
+
+gui.demarrer(app)

@@ -153,6 +153,15 @@ Copy-Item -Recurse editeurs\vscode "$env:USERPROFILE\.vscode\extensions\nck-lang
 
 puis redémarrez VS Code. L'extension utilise l'exécutable `nck` du PATH (ou `python -m nck` à défaut). Guide complet : [`docs/EDITEUR.md`](docs/EDITEUR.md).
 
+## Interfaces graphiques (v0.14 en cours)
+
+Un premier socle du module natif `gui` (Tkinter) permet déjà de créer une fenêtre,
+des étiquettes, boutons, champs et autres contrôles, avec callbacks et dialogues.
+L'API et ses limites actuelles sont décrites dans [`docs/GUI.md`](docs/GUI.md) ; un
+exemple se trouve dans [`exemples/gui/`](exemples/gui/). L'application doit être lancée
+dans une session de bureau graphique. Les types complets des widgets et leurs propriétés
+restent à construire.
+
 ## Structure du projet
 
 ```
@@ -164,6 +173,7 @@ nck/
 ├── verificateur.py   # vérification statique des types
 ├── interpreteur.py   # compilation de l'AST en fermetures + exécution
 ├── natifs.py         # fonctions intégrées (ecrire, longueur, ...)
+├── gui.py            # module graphique natif (Tkinter, chargé à la demande)
 ├── modules.py        # chargement des modules importés
 ├── erreurs.py        # erreurs avec position
 └── cli.py            # commande `nck`
@@ -196,7 +206,7 @@ Historique détaillé : [CHANGELOG.md](CHANGELOG.md). Licence MIT.
 - [x] v0.10 — fonctions anonymes `fonction(x): x * 2`, `appliquer`/`filtrer`/`reduire`…, types optionnels `texte?` + `??`, plages `a..b`
 - [x] v0.11 — notation méthode `liste.ajouter(x)`, énumérations, `si … alors … sinon` en expression, affectation multiple, textes `"""…"""`
 - [x] v0.12 — installateur sans Python : `NCK-Setup.exe` (Windows), `installer.sh` (Linux/macOS), releases automatiques, `nck info`
-- [ ] v0.13 — paquets `nck installer` · v0.14 — interface graphique · v0.15 — tests/formateur/doc · v0.16 — génériques, tuples, unions · … · v1.0
+- [ ] v0.13 — paquets `nck installer` (registre public à déployer) · v0.14 — interface graphique (premier socle en cours) · v0.15 — tests/formateur/doc · v0.16 — génériques, tuples, unions · … · v1.0
 - [ ] réécriture du moteur en C (reportée)
 
 Détail complet de ce qui reste : [`docs/ROADMAP.md`](docs/ROADMAP.md).

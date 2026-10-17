@@ -23,6 +23,7 @@ class Module:
         self.programme = None
         self.exports: dict = {}          # nom -> Symbole (rempli par le vérificateur)
         self.env = None                   # Env (rempli par l'interpréteur)
+        self.natif: str | None = None     # nom d'un module intégré (ex. `gui`)
         self.verifie = False
         self.execute = False
 
@@ -36,6 +37,16 @@ class Chargeur:
 
     def resoudre(self, chemin: str, depuis_fichier: str, noeud) -> Module:
         from .paquets import ErreurPaquet, entree_paquet, nom_valide
+
+        # Modules intégrés réservés : ils sont résolus avant les paquets portant le même nom.
+        if chemin == "gui":
+            cle = "<natif:gui>"
+            if cle not in self.modules:
+                module = Module(cle)
+                module.nom = "gui"
+                module.natif = "gui"
+                self.modules[cle] = module
+            return self.modules[cle]
 
         if depuis_fichier.startswith("<"):
             base = Path.cwd()
