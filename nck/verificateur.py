@@ -742,16 +742,25 @@ class Verificateur:
             cycle = " -> ".join(os.path.basename(c) for c in self.chargeur.en_cours + [m.chemin])
             raise self.erreur(f"import circulaire : {cycle}", imp)
         if not m.verifie:
-            prog = self.chargeur.charger_programme(m)
-            self.chargeur.en_cours.append(m.chemin)
-            try:
-                sous = Verificateur(m.chemin, chargeur=self.chargeur, classes=self.classes)
-                sous.classe_fichier = self.classe_fichier
-                sous.verifier_programme(prog)
-            finally:
-                self.chargeur.en_cours.pop()
-            m.exports = {n: sym for n, sym in sous.racine.symboles.items() if n not in NATIFS and n != "Erreur"}
-            m.verifie = True
+            if m.natif == "gui":
+                from .gui import EXPORTS
+                m.exports = {
+                    nom: Symbole(export.type, constante=True, genre="fonction", description=export.signature,
+                                 fichier=m.chemin)
+                    for nom, export in EXPORTS.items()
+                }
+                m.verifie = True
+            else:
+                prog = self.chargeur.charger_programme(m)
+                self.chargeur.en_cours.append(m.chemin)
+                try:
+                    sous = Verificateur(m.chemin, chargeur=self.chargeur, classes=self.classes)
+                    sous.classe_fichier = self.classe_fichier
+                    sous.verifier_programme(prog)
+                finally:
+                    self.chargeur.en_cours.pop()
+                m.exports = {n: sym for n, sym in sous.racine.symboles.items() if n not in NATIFS and n != "Erreur"}
+                m.verifie = True
         imp.module = m  # type: ignore[attr-defined]
         if imp.noms is not None:
             for nom in imp.noms:

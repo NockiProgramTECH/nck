@@ -89,6 +89,7 @@ nav:
   - Outils:
       - Ligne de commande nck: outils/cli.md
       - Gestionnaire de paquets: PAQUETS.md
+      - Interfaces graphiques: GUI.md
       - Mode interactif (REPL): outils/repl.md
       - Visual Studio Code: EDITEUR.md
       - Construire et publier: outils/publier.md

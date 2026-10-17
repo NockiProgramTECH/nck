@@ -1,5 +1,11 @@
 # Journal des modifications
 
+## 0.14.0 — interface graphique (en développement)
+- Première tranche du module natif `gui` avec Tkinter : fenêtre, étiquette, bouton et callback, champ, case à cocher, liste déroulante, zone de texte, image, conteneurs et grille.
+- Lecture/modification des valeurs et du texte, dialogues informatifs, Oui/Non et sélecteur de fichier ; chargement Tkinter différé pour permettre `nck verifier` sans écran graphique.
+- Tests d'intégration sur un faux backend Tkinter, documentation `docs/GUI.md` et exemple `exemples/gui/bonjour_gui.nck`.
+- Les poignées restent `quelconque` et les propriétés typées des widgets sont à venir ; la v0.14 n'est pas terminée. La v0.13.0 reste la version du moteur.
+
 ## 0.13.0 — gestionnaire de paquets (non publiée)
 - Correctif Windows : contrôle des noms bruts des entrées ZIP avant la normalisation des antislashs et la troncature des NUL par Python ; fixtures de sécurité identiques sur toutes les plateformes.
 - Documentation : construction sur les branches de travail, publication GitHub Pages uniquement depuis `main` ; concurrence isolée par branche pour ne pas interrompre un déploiement de production.

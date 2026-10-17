@@ -19,6 +19,7 @@ Les programmes ci-dessous sont fournis avec NCK (dossier `exemples/` de l'instal
 | `modules/principal.nck` | `importer`, `comme`, `depuis … importer` |
 | `devine.nck` | petit jeu interactif (`lire`, `aleatoire`) |
 | `benchmark.nck` | mesure de performance (Fibonacci récursif) |
+| `gui/bonjour_gui.nck` | première fenêtre, champ de saisie, bouton et callback (session graphique requise) |
 
 ## Petits programmes complets
 

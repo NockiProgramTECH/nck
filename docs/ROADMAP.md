@@ -51,9 +51,17 @@ Les index locaux et HTTPS personnalisés sont utilisables sans ce déploiement.
 
 **Pourquoi** : demandé par l'utilisateur dès que la POO est complète (c'est fait depuis v0.9).
 
+**Première tranche commencée** : module natif `gui` basé sur Tkinter, avec fenêtres,
+étiquettes, boutons et callbacks, champs, cases, listes déroulantes, zones de texte,
+images, conteneurs `ligne`/`colonne`/`grille`, dialogues et tests sans affichage réel.
+La vérification statique est disponible dès l'import ; les poignées de widgets restent
+pour l'instant de type `quelconque` et se manipulent avec les fonctions du module.
+La version reste en développement : les classes de widgets typées, les propriétés
+(`champ.valeur`), les styles et les autres exemples restent à compléter.
+
 - Module natif `gui` (basé sur Tkinter embarqué dans l'exécutable — aucune dépendance) :
   `fenetre(titre, largeur, hauteur)`, `etiquette`, `bouton(texte, action)`, `champ`, `case`, `liste_deroulante`, `zone_texte`, `image`, `grille`/`colonne`/`ligne` pour la mise en page.
-- Événements avec fonctions anonymes : `bouton("OK", fonction(): ecrire("cliqué"))`.
+- Événements avec fonctions anonymes : `bouton(fenetre, "OK", fonction(): ecrire("cliqué"))`.
 - Liaison de données simple : `champ.valeur`, `etiquette.texte = …`.
 - Boîtes de dialogue : `message`, `question`, `choisir_fichier`.
 - Typage complet (classes `Fenetre`, `Bouton`… visibles par l'autocomplétion VS Code).

@@ -713,10 +713,16 @@ class Interpreteur:
 
         def importer(env):
             if not m.execute:
-                m.execute = True
-                sous = Interpreteur(m.chemin, self.limite_recursion, chargeur, base_env)
-                sous.executer(m.programme)
-                m.env = sous.global_env
+                if m.natif == "gui":
+                    from .gui import fonctions_module
+                    m.env = Env()
+                    m.env.vars.update(fonctions_module())
+                    m.execute = True
+                else:
+                    m.execute = True
+                    sous = Interpreteur(m.chemin, self.limite_recursion, chargeur, base_env)
+                    sous.executer(m.programme)
+                    m.env = sous.global_env
             if noms is not None:
                 for n in noms:
                     env.vars[n] = m.env.vars[n]
